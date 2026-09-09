@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: masud-jr-official-online
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: FRONTEND_URL
+        value: https://masudjr-official-online.netlify.app
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
