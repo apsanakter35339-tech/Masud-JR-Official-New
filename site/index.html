@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Masud JR Official</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <section id="authPage" class="auth-shell">
+      <div class="auth-card">
+        <div class="brand-avatar" id="authAvatar">MJ</div>
+        <h1>Masud JR Official</h1>
+        <p class="tagline">আপনার কাজ, আপনার হিসাব, আপনার ড্যাশবোর্ড</p>
+
+        <div class="auth-tabs">
+          <button class="tab-btn active" data-auth="login" type="button">Login</button>
+          <button class="tab-btn" data-auth="register" type="button">Registration</button>
+        </div>
+
+        <form id="loginForm" class="auth-form">
+          <label for="loginName">নাম / User ID</label>
+          <input id="loginName" type="text" placeholder="আপনার নাম লিখুন" autocomplete="username" required>
+
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" placeholder="পাসওয়ার্ড" autocomplete="current-password" required>
+
+          <button class="primary-btn" type="submit">Login</button>
+          <p id="loginMessage" class="form-message"></p>
+        </form>
+
+        <form id="registerForm" class="auth-form hidden">
+          <label for="registerName">নাম</label>
+          <input id="registerName" type="text" placeholder="আপনার নাম লিখুন" autocomplete="name" required minlength="2">
+
+          <label for="registerPassword">Password</label>
+          <input id="registerPassword" type="password" placeholder="কমপক্ষে 6 অক্ষর" autocomplete="new-password" required minlength="6">
+
+          <label for="registerConfirm">Confirm Password</label>
+          <input id="registerConfirm" type="password" placeholder="পাসওয়ার্ড আবার লিখুন" autocomplete="new-password" required minlength="6">
+
+          <button class="primary-btn" type="submit">Registration</button>
+          <p id="registerMessage" class="form-message"></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="dashboard" class="dashboard hidden">
+      <header class="topbar">
+        <div class="profile-mini">
+          <div class="avatar" id="userAvatar">MJ</div>
+          <div>
+            <div class="eyebrow">স্বাগতম</div>
+            <strong id="headerUserName">User</strong>
+          </div>
+        </div>
+
+        <button id="headerLogout" class="icon-btn" type="button" aria-label="Logout">↪</button>
+      </header>
+
+      <main class="page-wrap">
+
+        <section id="section-home" class="page-section active-section">
+          <div class="hero-card">
+            <div>
+              <span class="pill">Masud JR Official</span>
+              <h2>কাজ করুন, হিসাব দেখুন</h2>
+              <p>আপনার Task, Balance ও Withdrawal এক জায়গায়।</p>
+            </div>
+
+            <div class="hero-balance">
+              <small>মোট ব্যালেন্স</small>
+              <strong id="homeBalance">৳0</strong>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span>আজকের আয়</span>
+              <strong id="todayIncome">৳0</strong>
+            </div>
+
+            <div class="stat-card">
+              <span>মোট আয়</span>
+              <strong id="totalIncome">৳0</strong>
+            </div>
+
+            <div class="stat-card">
+              <span>Completed</span>
+              <strong id="completedCount">0</strong>
+            </div>
+          </div>
+
+          <button id="homeTaskBtn" class="wide-action" type="button">
+            🚚 Trucks / Tasks
+          </button>
+
+          <div class="notice-card compact">
+            <h3>📢 Notice</h3>
+            <div id="homeNotice">নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে দেখা যাবে।</div>
+          </div>
+        </section>
+
+        <section id="section-tasks" class="page-section">
+          <div class="section-head">
+            <div>
+              <h2>🚚 Trucks / Tasks</h2>
+              <p>সব কাজ এক জায়গায়</p>
+            </div>
+          </div>
+
+          <div id="taskList" class="task-list"></div>
+        </section>
+
+        <section id="section-balance" class="page-section">
+          <div class="balance-card">
+            <span>বর্তমান ব্যালেন্স</span>
+            <strong id="balanceAmount">৳0</strong>
+
+            <div class="balance-subgrid">
+              <div>
+                <small>আজকের আয়</small>
+                <b id="balanceToday">৳0</b>
+              </div>
+
+              <div>
+                <small>মোট আয়</small>
+                <b id="balanceTotal">৳0</b>
+              </div>
+            </div>
+
+            <button id="withdrawBtn" class="withdraw-btn" type="button">
+              Withdraw
+            </button>
+          </div>
+
+          <div id="feeBox" class="fee-box hidden">
+            <div class="fee-head">
+              <h3>💳 Processing Fee</h3>
+              <span>৳70</span>
+            </div>
+
+            <p>
+              প্রথম Withdrawal-এর আগে ৳70 Processing Fee manual verification-এর
+              জন্য জমা দিন।
+            </p>
+
+            <div class="fee-number">
+              <strong>01961504587</strong>
+              <button id="copyFeeNumber" type="button">Copy</button>
+            </div>
+
+            <label for="feeTxId">Transaction ID</label>
+            <input id="feeTxId" placeholder="Transaction ID লিখুন">
+
+            <button id="submitFeeBtn" class="primary-btn" type="button">
+              Submit Payment
+            </button>
+
+            <p id="feeMessage" class="form-message"></p>
+          </div>
+        </section>
+
+        <section id="section-history" class="page-section">
+          <div class="section-head">
+            <div>
+              <h2>📜 History</h2>
+              <p>আপনার কাজ ও Withdrawal হিসাব</p>
+            </div>
+          </div>
+
+          <div id="historyList" class="history-list"></div>
+        </section>
+
+        <section id="section-profile" class="page-section">
+          <div class="profile-card-large">
+            <div class="avatar big" id="profileAvatar">MJ</div>
+
+            <h2 id="profileName">User</h2>
+            <p>User ID: <span id="profileId">-</span></p>
+
+            <div class="profile-meta">
+              <span>Joined</span>
+              <strong id="profileJoined">-</strong>
+            </div>
+
+            <button id="profileLogout" class="logout-btn" type="button">
+              Logout
+            </button>
+          </div>
+        </section>
+
+        <section id="section-notice" class="page-section">
+          <div class="section-head">
+            <div>
+              <h2>📢 Notice</h2>
+              <p>নতুন task ও গুরুত্বপূর্ণ ঘোষণা</p>
+            </div>
+          </div>
+
+          <div id="noticeList" class="notice-list"></div>
+        </section>
+
+        <section id="section-service" class="page-section">
+          <div class="section-head">
+            <div>
+              <h2>💬 Customer Service</h2>
+              <p>যোগাযোগের জন্য</p>
+            </div>
+          </div>
+
+          <a
+            class="contact-card"
+            href="https://m.me/masud.11.jr"
+            target="_blank"
+            rel="noopener"
+          >
+            Messenger
+          </a>
+
+          <a
+            class="contact-card whatsapp"
+            href="https://wa.me/8801961504587"
+            target="_blank"
+            rel="noopener"
+          >
+            WhatsApp: 01961504587
+          </a>
+        </section>
+
+        <section id="section-withdraw" class="page-section">
+          <div class="section-head">
+            <div>
+              <h2>💸 Withdraw</h2>
+              <p>Minimum withdrawal ৳200</p>
+            </div>
+          </div>
+
+          <form id="withdrawForm" class="withdraw-form">
+            <label for="withdrawMethod">Payment Method</label>
+
+            <select id="withdrawMethod">
+              <option value="bKash">bKash</option>
+              <option value="Nagad">Nagad</option>
+              <option value="Rocket">Rocket</option>
+            </select>
+
+            <label for="withdrawNumber">Account Number</label>
+            <input
+              id="withdrawNumber"
+              placeholder="01XXXXXXXXX"
+              inputmode="numeric"
+              required
+            >
+
+            <label for="withdrawAmount">Amount</label>
+            <input
+              id="withdrawAmount"
+              type="number"
+              min="200"
+              step="1"
+              placeholder="200"
+              required
+            >
+
+            <div class="fee-note">
+              First withdrawal processing fee: ৳70 (manual verification)
+            </div>
+
+            <button class="primary-btn" type="submit">
+              Submit Withdrawal
+            </button>
+
+            <p id="withdrawMessage" class="form-message"></p>
+          </form>
+        </section>
+
+      </main>
+
+      <nav class="bottom-nav">
+        <button data-section="home" class="nav-btn active" type="button">
+          ⌂<span>Home</span>
+        </button>
+
+        <button data-section="tasks" class="nav-btn" type="button">
+          🚚<span>Tasks</span>
+        </button>
+
+        <button data-section="balance" class="nav-btn" type="button">
+          ৳<span>Balance</span>
+        </button>
+
+        <button data-section="history" class="nav-btn" type="button">
+          ☷<span>History</span>
+        </button>
+
+        <button data-section="profile" class="nav-btn" type="button">
+          ◉<span>Profile</span>
+        </button>
+      </nav>
+    </section>
+  </div>
+
+  <div id="taskModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="closeTaskModal" class="modal-close" type="button">×</button>
+
+      <div class="modal-icon">⏱️</div>
+
+      <h3 id="modalTaskTitle">Task</h3>
+      <p id="modalTaskInfo">Task চলমান...</p>
+
+      <div class="countdown" id="countdown">10</div>
+
+      <div class="progress-track">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+
+      <p id="modalStatus" class="modal-status">
+        Task Complete লেখা আসা পর্যন্ত অপেক্ষা করুন।
+      </p>
+
+      <button id="cancelTaskBtn" class="cancel-btn" type="button">
+        Cancel
+      </button>
+
+      <button id="verifyTaskBtn" class="primary-btn hidden" type="button">
+        Task Complete
+      </button>
+    </div>
+  </div>
+
+  <script>
+    window.API_BASE = 'https://masud-jr-official-online.onrender.com';
+  </script>
+
+  <script src="script.js"></script>
+</body>
+</html>
