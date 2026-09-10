@@ -1004,30 +1004,8 @@ app.post('/api/withdrawals',(req,res)=>{
     });
   }
 
-  const first=!q(`
-    SELECT id
-    FROM withdrawals
-    WHERE user_id=?
-    LIMIT 1
-  `).get(u.id);
-
-  if(first){
-    const fee=q(`
-      SELECT status
-      FROM fee_payments
-      WHERE user_id=?
-      ORDER BY id DESC
-      LIMIT 1
-    `).get(u.id);
-
-    if(!fee||fee.status!=='approved'){
-      return res.status(403).json({
-        message:'প্রথম withdrawal-এর Processing Fee আগে Admin দ্বারা approve হতে হবে।'
-      });
-    }
-  }
-
   const tx=db.transaction(()=>{
+
     q(`
       UPDATE users
       SET balance=balance-?
@@ -1039,7 +1017,12 @@ app.post('/api/withdrawals',(req,res)=>{
 
     const id=q(`
       INSERT INTO withdrawals(
-        user_id,method,account_number,amount,status,created_at
+        user_id,
+        method,
+        account_number,
+        amount,
+        status,
+        created_at
       )
       VALUES(?,?,?,?,?,?)
     `).run(
@@ -1053,7 +1036,11 @@ app.post('/api/withdrawals',(req,res)=>{
 
     q(`
       INSERT INTO history(
-        user_id,title,amount,status,created_at
+        user_id,
+        title,
+        amount,
+        status,
+        created_at
       )
       VALUES(?,?,?,?,?)
     `).run(
@@ -1069,7 +1056,8 @@ app.post('/api/withdrawals',(req,res)=>{
 
   res.json({
     ok:true,
-    id:tx
+    id:tx,
+    message:'Withdrawal request সফলভাবে পাঠানো হয়েছে। Admin review করবে।'
   });
 });
 
