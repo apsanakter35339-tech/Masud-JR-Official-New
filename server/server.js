@@ -1579,6 +1579,11 @@ app.use(
   express.static(siteDir)
 );
 
+app.use(
+  '/admin',
+  express.static(path.join(__dirname,'..','admin'))
+);
+
 app.get(
   '/admin',
   (req,res)=>{
