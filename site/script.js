@@ -5,6 +5,7 @@
 
   const state = {
     user: null,
+    session: "",
     tasks: [],
     notices: [],
     history: [],
@@ -14,6 +15,7 @@
     completedCount: 0,
     activeTask: null,
     taskTimer: null,
+    heartbeatTimer: null,
     taskStartedAt: null
   };
 
@@ -57,13 +59,32 @@
     element.style.color = success ? "#16a34a" : "#dc2626";
   }
 
+  function saveSession(session) {
+    if (session) {
+      localStorage.setItem("masud_jr_session", session);
+    }
+  }
+
+  function loadSession() {
+    return localStorage.getItem("masud_jr_session") || "";
+  }
+
+  function clearSession() {
+    localStorage.removeItem("masud_jr_session");
+  }
+
   function saveUser(user) {
-    localStorage.setItem("masud_jr_user", JSON.stringify(user));
+    localStorage.setItem(
+      "masud_jr_user",
+      JSON.stringify(user)
+    );
   }
 
   function loadSavedUser() {
     try {
-      const saved = localStorage.getItem("masud_jr_user");
+      const saved =
+        localStorage.getItem("masud_jr_user");
+
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -76,19 +97,31 @@
 
   async function api(path, options = {}) {
     if (!API_BASE) {
-      throw new Error("API server address পাওয়া যায়নি।");
+      throw new Error(
+        "API server address পাওয়া যায়নি।"
+      );
     }
 
-    const response = await fetch(`${API_BASE}${path}`, {
-      method: options.method || "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {})
-      },
-      body: options.body
-        ? JSON.stringify(options.body)
-        : undefined
-    });
+    const headers = {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    };
+
+    if (state.session) {
+      headers["x-user-session"] = state.session;
+    }
+
+    const response = await fetch(
+      `${API_BASE}${path}`,
+      {
+        method: options.method || "GET",
+        headers,
+        body:
+          options.body !== undefined
+            ? JSON.stringify(options.body)
+            : undefined
+      }
+    );
 
     let data = {};
 
@@ -109,8 +142,14 @@
     return data;
   }
 
-  function setLoggedIn(user) {
+  function setLoggedIn(user, session) {
     state.user = user;
+    state.session = session || state.session;
+
+    if (state.session) {
+      saveSession(state.session);
+    }
+
     saveUser(user);
 
     $("authPage")?.classList.add("hidden");
@@ -120,15 +159,32 @@
     loadDashboard();
   }
 
-  function logout() {
+  async function logout() {
+    try {
+      if (state.session) {
+        await api("/api/logout", {
+          method: "POST"
+        });
+      }
+    } catch (error) {
+      console.warn("Logout:", error.message);
+    }
+
+    clearSession();
     clearSavedUser();
 
     state.user = null;
+    state.session = "";
     state.tasks = [];
     state.notices = [];
     state.history = [];
+    state.balance = 0;
+    state.todayIncome = 0;
+    state.totalIncome = 0;
+    state.completedCount = 0;
 
     stopTaskTimer();
+    stopHeartbeat();
 
     $("dashboard")?.classList.add("hidden");
     $("authPage")?.classList.remove("hidden");
@@ -139,24 +195,49 @@
   function updateProfileUI() {
     if (!state.user) return;
 
-    const name = state.user.name || state.user.username || "User";
-    const id = state.user.id || state.user.userId || "-";
+    const name =
+      state.user.name ||
+      state.user.username ||
+      "User";
+
+    const id =
+      state.user.id ||
+      state.user.userId ||
+      "-";
 
     const avatarText = initials(name);
 
-    if ($("authAvatar")) $("authAvatar").textContent = avatarText;
-    if ($("userAvatar")) $("userAvatar").textContent = avatarText;
-    if ($("profileAvatar")) $("profileAvatar").textContent = avatarText;
+    if ($("authAvatar")) {
+      $("authAvatar").textContent = avatarText;
+    }
 
-    if ($("headerUserName")) $("headerUserName").textContent = name;
-    if ($("profileName")) $("profileName").textContent = name;
-    if ($("profileId")) $("profileId").textContent = id;
+    if ($("userAvatar")) {
+      $("userAvatar").textContent = avatarText;
+    }
+
+    if ($("profileAvatar")) {
+      $("profileAvatar").textContent = avatarText;
+    }
+
+    if ($("headerUserName")) {
+      $("headerUserName").textContent = name;
+    }
+
+    if ($("profileName")) {
+      $("profileName").textContent = name;
+    }
+
+    if ($("profileId")) {
+      $("profileId").textContent = id;
+    }
 
     if ($("profileJoined")) {
       $("profileJoined").textContent =
-        state.user.createdAt
-          ? formatDate(state.user.createdAt)
-          : "-";
+        state.user.created_at
+          ? formatDate(state.user.created_at)
+          : state.user.createdAt
+            ? formatDate(state.user.createdAt)
+            : "-";
     }
   }
 
@@ -169,11 +250,14 @@
       return String(value);
     }
 
-    return date.toLocaleDateString("bn-BD", {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
+    return date.toLocaleDateString(
+      "bn-BD",
+      {
+        year: "numeric",
+        month: "long",
+        day: "numeric"
+      }
+    );
   }
 
   function formatDateTime(value) {
@@ -185,27 +269,38 @@
       return String(value);
     }
 
-    return date.toLocaleString("bn-BD", {
-      dateStyle: "medium",
-      timeStyle: "short"
-    });
+    return date.toLocaleString(
+      "bn-BD",
+      {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }
+    );
   }
 
   function showSection(sectionName) {
-    document.querySelectorAll(".page-section").forEach((section) => {
-      section.classList.remove("active-section");
-    });
+    document
+      .querySelectorAll(".page-section")
+      .forEach((section) => {
+        section.classList.remove(
+          "active-section"
+        );
+      });
 
     document
-      .querySelector(`#section-${sectionName}`)
+      .querySelector(
+        `#section-${sectionName}`
+      )
       ?.classList.add("active-section");
 
-    document.querySelectorAll(".nav-btn").forEach((button) => {
-      button.classList.toggle(
-        "active",
-        button.dataset.section === sectionName
-      );
-    });
+    document
+      .querySelectorAll(".nav-btn")
+      .forEach((button) => {
+        button.classList.toggle(
+          "active",
+          button.dataset.section === sectionName
+        );
+      });
 
     if (sectionName === "withdraw") {
       renderBalance();
@@ -214,27 +309,33 @@
 
   function renderBalance() {
     if ($("homeBalance")) {
-      $("homeBalance").textContent = money(state.balance);
+      $("homeBalance").textContent =
+        money(state.balance);
     }
 
     if ($("balanceAmount")) {
-      $("balanceAmount").textContent = money(state.balance);
+      $("balanceAmount").textContent =
+        money(state.balance);
     }
 
     if ($("todayIncome")) {
-      $("todayIncome").textContent = money(state.todayIncome);
+      $("todayIncome").textContent =
+        money(state.todayIncome);
     }
 
     if ($("balanceToday")) {
-      $("balanceToday").textContent = money(state.todayIncome);
+      $("balanceToday").textContent =
+        money(state.todayIncome);
     }
 
     if ($("totalIncome")) {
-      $("totalIncome").textContent = money(state.totalIncome);
+      $("totalIncome").textContent =
+        money(state.totalIncome);
     }
 
     if ($("balanceTotal")) {
-      $("balanceTotal").textContent = money(state.totalIncome);
+      $("balanceTotal").textContent =
+        money(state.totalIncome);
     }
 
     if ($("completedCount")) {
@@ -244,14 +345,13 @@
   }
 
   async function loadDashboard() {
-    if (!state.user) return;
+    if (!state.user || !state.session) {
+      return;
+    }
 
     try {
-      const data = await api(
-        `/api/user/${encodeURIComponent(
-          state.user.id || state.user.userId || state.user.name
-        )}`
-      );
+      const data =
+        await api("/api/me");
 
       if (data.user) {
         state.user = {
@@ -262,44 +362,54 @@
         saveUser(state.user);
         updateProfileUI();
       }
+    } catch (error) {
+      console.warn(
+        "ME API:",
+        error.message
+      );
+
+      if (
+        error.message === "Session expired"
+      ) {
+        await logout();
+        return;
+      }
+    }
+
+    try {
+      const data =
+        await api("/api/dashboard");
 
       if (data.balance !== undefined) {
-        state.balance = Number(data.balance || 0);
+        state.balance =
+          Number(data.balance || 0);
       }
 
-      if (data.todayIncome !== undefined) {
-        state.todayIncome = Number(data.todayIncome || 0);
+      if (
+        data.todayEarnings !== undefined
+      ) {
+        state.todayIncome =
+          Number(data.todayEarnings || 0);
       }
 
-      if (data.totalIncome !== undefined) {
-        state.totalIncome = Number(data.totalIncome || 0);
+      if (
+        data.totalEarnings !== undefined
+      ) {
+        state.totalIncome =
+          Number(data.totalEarnings || 0);
       }
 
-      if (data.completedCount !== undefined) {
-        state.completedCount = Number(data.completedCount || 0);
+      if (
+        data.completedCount !== undefined
+      ) {
+        state.completedCount =
+          Number(data.completedCount || 0);
       }
-
-      if (Array.isArray(data.tasks)) {
-        state.tasks = data.tasks;
-      }
-
-      if (Array.isArray(data.notices)) {
-        state.notices = data.notices;
-      }
-
-      if (Array.isArray(data.history)) {
-        state.history = data.history;
-      }
-
-      renderAll();
     } catch (error) {
-      console.warn("Dashboard API:", error.message);
-
-      /*
-        Backend endpoint এখনো প্রস্তুত না থাকলে
-        frontend কাজ বন্ধ করবে না।
-      */
-      renderAll();
+      console.warn(
+        "Dashboard API:",
+        error.message
+      );
     }
 
     await Promise.allSettled([
@@ -313,52 +423,67 @@
 
   async function loadTasks() {
     try {
-      const data = await api("/api/tasks");
+      const data =
+        await api("/api/tasks");
 
       if (Array.isArray(data)) {
         state.tasks = data;
-      } else if (Array.isArray(data.tasks)) {
+      } else if (
+        Array.isArray(data.tasks)
+      ) {
         state.tasks = data.tasks;
       }
+
+      renderTasks();
     } catch (error) {
-      console.warn("Tasks:", error.message);
+      console.warn(
+        "Tasks:",
+        error.message
+      );
     }
   }
 
   async function loadNotices() {
     try {
-      const data = await api("/api/notices");
+      const data =
+        await api("/api/notices");
 
       if (Array.isArray(data)) {
         state.notices = data;
-      } else if (Array.isArray(data.notices)) {
+      } else if (
+        Array.isArray(data.notices)
+      ) {
         state.notices = data.notices;
       }
+
+      renderNotices();
     } catch (error) {
-      console.warn("Notices:", error.message);
+      console.warn(
+        "Notices:",
+        error.message
+      );
     }
   }
 
   async function loadHistory() {
-    if (!state.user) return;
-
-    const userId =
-      state.user.id ||
-      state.user.userId ||
-      state.user.name;
-
     try {
-      const data = await api(
-        `/api/history/${encodeURIComponent(userId)}`
-      );
+      const data =
+        await api("/api/history");
 
       if (Array.isArray(data)) {
         state.history = data;
-      } else if (Array.isArray(data.history)) {
+      } else if (
+        Array.isArray(data.history)
+      ) {
         state.history = data.history;
       }
+
+      renderHistory();
     } catch (error) {
-      console.warn("History:", error.message);
+      console.warn(
+        "History:",
+        error.message
+      );
     }
   }
 
@@ -370,7 +495,8 @@
   }
 
   function renderTasks() {
-    const container = $("taskList");
+    const container =
+      $("taskList");
 
     if (!container) return;
 
@@ -383,92 +509,152 @@
       return;
     }
 
-    container.innerHTML = state.tasks.map((task) => {
-      const id = task.id || task._id || "";
-      const title = task.title || task.name || "Task";
-      const description =
-        task.description ||
-        task.details ||
-        "এই Task সম্পন্ন করুন।";
+    container.innerHTML =
+      state.tasks.map((task) => {
+        const id =
+          task.id ||
+          task._id ||
+          "";
 
-      const reward = Number(
-        task.reward ??
-        task.amount ??
-        0
-      );
+        const title =
+          task.title ||
+          task.name ||
+          "Task";
 
-      const completed =
-        task.completed === true ||
-        task.status === "completed";
+        const description =
+          task.description ||
+          task.details ||
+          "এই Task সম্পন্ন করুন।";
 
-      return `
-        <article class="task-card">
-          <div class="task-top">
-            <div>
-              <h3>${escapeHTML(title)}</h3>
-              <p>${escapeHTML(description)}</p>
+        const reward =
+          Number(
+            task.reward ??
+            task.amount ??
+            0
+          );
+
+        const completed =
+          task.completed === true ||
+          task.status === "completed";
+
+        const waiting =
+          task.available_at &&
+          new Date(task.available_at) >
+            new Date();
+
+        return `
+          <article class="task-card">
+
+            <div class="task-top">
+              <div>
+                <h3>
+                  ${escapeHTML(title)}
+                </h3>
+
+                <p>
+                  ${escapeHTML(
+                    description
+                  )}
+                </p>
+              </div>
+
+              <div class="task-reward">
+                ${money(reward)}
+              </div>
             </div>
 
-            <div class="task-reward">
-              ${money(reward)}
+            <div class="task-actions">
+
+              ${
+                completed
+                  ? `
+                    <button
+                      class="task-disabled"
+                      type="button"
+                      disabled
+                    >
+                      Completed
+                    </button>
+                  `
+                  : waiting
+                    ? `
+                      <button
+                        class="task-disabled"
+                        type="button"
+                        disabled
+                      >
+                        পরে আবার করুন
+                      </button>
+                    `
+                    : `
+                      <button
+                        class="task-start"
+                        type="button"
+                        data-task-id="${escapeHTML(
+                          id
+                        )}"
+                      >
+                        Start Task
+                      </button>
+                    `
+              }
+
             </div>
-          </div>
 
-          <div class="task-actions">
-            ${
-              completed
-                ? `
-                  <button
-                    class="task-disabled"
-                    type="button"
-                    disabled
-                  >
-                    Completed
-                  </button>
-                `
-                : `
-                  <button
-                    class="task-start"
-                    type="button"
-                    data-task-id="${escapeHTML(id)}"
-                  >
-                    Start Task
-                  </button>
-                `
-            }
-          </div>
+            <div class="task-status">
 
-          <div class="task-status">
-            ${
-              completed
-                ? `<span class="status-completed">✓ Completed</span>`
-                : `Task শুরু করতে Start Task চাপুন।`
-            }
-          </div>
-        </article>
-      `;
-    }).join("");
+              ${
+                completed
+                  ? `
+                    <span class="status-completed">
+                      ✓ Completed
+                    </span>
+                  `
+                  : waiting
+                    ? `
+                      এই Task এখনো available নয়।
+                    `
+                    : `
+                      Task শুরু করতে
+                      Start Task চাপুন।
+                    `
+              }
+
+            </div>
+
+          </article>
+        `;
+      }).join("");
 
     container
       .querySelectorAll(".task-start")
       .forEach((button) => {
-        button.addEventListener("click", () => {
-          startTask(button.dataset.taskId);
-        });
+        button.addEventListener(
+          "click",
+          () => {
+            startTask(
+              button.dataset.taskId
+            );
+          }
+        );
       });
   }
 
   function renderNotices() {
-    const list = $("noticeList");
-    const homeNotice = $("homeNotice");
+    const list =
+      $("noticeList");
+
+    const homeNotice =
+      $("homeNotice");
 
     if (homeNotice) {
       if (state.notices.length) {
-        const latest = state.notices[0];
+        const latest =
+          state.notices[0];
 
         homeNotice.textContent =
-          latest.text ||
           latest.message ||
+          latest.text ||
           latest.title ||
           "নতুন ঘোষণা দেখুন।";
       } else {
@@ -488,32 +674,55 @@
       return;
     }
 
-    list.innerHTML = state.notices.map((notice) => {
-      const title = notice.title || "Notice";
-      const text =
-        notice.text ||
-        notice.message ||
-        notice.description ||
-        "";
+    list.innerHTML =
+      state.notices.map(
+        (notice) => {
+          const title =
+            notice.title ||
+            "Notice";
 
-      return `
-        <article class="notice-item">
-          <h3>${escapeHTML(title)}</h3>
-          <p>${escapeHTML(text)}</p>
-          ${
-            notice.createdAt
-              ? `<p>${escapeHTML(
-                  formatDateTime(notice.createdAt)
-                )}</p>`
-              : ""
-          }
-        </article>
-      `;
-    }).join("");
+          const text =
+            notice.message ||
+            notice.text ||
+            notice.description ||
+            "";
+
+          const date =
+            notice.created_at ||
+            notice.createdAt;
+
+          return `
+            <article class="notice-item">
+
+              <h3>
+                ${escapeHTML(title)}
+              </h3>
+
+              <p>
+                ${escapeHTML(text)}
+              </p>
+
+              ${
+                date
+                  ? `
+                    <p>
+                      ${escapeHTML(
+                        formatDateTime(date)
+                      )}
+                    </p>
+                  `
+                  : ""
+              }
+
+            </article>
+          `;
+        }
+      ).join("");
   }
 
   function renderHistory() {
-    const list = $("historyList");
+    const list =
+      $("historyList");
 
     if (!list) return;
 
@@ -526,66 +735,91 @@
       return;
     }
 
-    list.innerHTML = state.history.map((item) => {
-      const type =
-        item.type ||
-        item.title ||
-        "Transaction";
+    list.innerHTML =
+      state.history.map(
+        (item) => {
+          const type =
+            item.title ||
+            item.type ||
+            "Transaction";
 
-      const amount = Number(item.amount || 0);
+          const amount =
+            Number(
+              item.amount || 0
+            );
 
-      const status =
-        item.status ||
-        "Pending";
+          const status =
+            item.status ||
+            "Pending";
 
-      const date =
-        item.createdAt ||
-        item.date ||
-        item.updatedAt;
+          const date =
+            item.created_at ||
+            item.createdAt ||
+            item.date ||
+            item.updatedAt;
 
-      const statusClass =
-        String(status).toLowerCase() === "completed"
-          ? "status-completed"
-          : String(status).toLowerCase() === "rejected"
-            ? "status-rejected"
-            : "status-pending";
+          const statusLower =
+            String(status)
+              .toLowerCase();
 
-      return `
-        <article class="history-item">
-          <div>
-            <h4>${escapeHTML(type)}</h4>
+          const statusClass =
+            statusLower === "completed"
+              ? "status-completed"
+              : statusLower === "rejected"
+                ? "status-rejected"
+                : "status-pending";
 
-            <p>
-              ${escapeHTML(
-                date ? formatDateTime(date) : ""
-              )}
-            </p>
-          </div>
+          return `
+            <article class="history-item">
 
-          <div>
-            <div class="history-amount">
-              ${money(amount)}
-            </div>
+              <div>
+                <h4>
+                  ${escapeHTML(type)}
+                </h4>
 
-            <div class="history-status ${statusClass}">
-              ${escapeHTML(status)}
-            </div>
-          </div>
-        </article>
-      `;
-    }).join("");
+                <p>
+                  ${escapeHTML(
+                    date
+                      ? formatDateTime(date)
+                      : ""
+                  )}
+                </p>
+              </div>
+
+              <div>
+
+                <div class="history-amount">
+                  ${money(amount)}
+                </div>
+
+                <div
+                  class="history-status ${statusClass}"
+                >
+                  ${escapeHTML(status)}
+                </div>
+
+              </div>
+
+            </article>
+          `;
+        }
+      ).join("");
   }
 
   async function startTask(taskId) {
-    if (!state.user) {
+    if (!state.user || !state.session) {
       alert("আগে Login করুন।");
       return;
     }
 
-    const task = state.tasks.find(
-      (item) =>
-        String(item.id || item._id) === String(taskId)
-    );
+    const task =
+      state.tasks.find(
+        (item) =>
+          String(
+            item.id ||
+            item._id
+          ) === String(taskId)
+      );
 
     if (!task) {
       alert("Task পাওয়া যায়নি।");
@@ -599,26 +833,108 @@
       return;
     }
 
+    const id =
+      task.id ||
+      task._id;
+
+    try {
+      await api(
+        `/api/tasks/${encodeURIComponent(id)}/start`,
+        {
+          method: "POST"
+        }
+      );
+    } catch (error) {
+      alert(
+        error.message ||
+        "Task শুরু করা যায়নি।"
+      );
+      return;
+    }
+
     state.activeTask = task;
     state.taskStartedAt = Date.now();
 
-    $("taskModal")?.classList.remove("hidden");
+    $("taskModal")?.classList.remove(
+      "hidden"
+    );
 
-    $("modalTaskTitle").textContent =
-      task.title || task.name || "Task";
+    if ($("modalTaskTitle")) {
+      $("modalTaskTitle").textContent =
+        task.title ||
+        task.name ||
+        "Task";
+    }
 
-    $("modalTaskInfo").textContent =
-      task.description ||
-      task.details ||
-      "Task processing হচ্ছে...";
+    if ($("modalTaskInfo")) {
+      $("modalTaskInfo").textContent =
+        task.description ||
+        task.details ||
+        "Task processing হচ্ছে...";
+    }
 
-    $("modalStatus").textContent =
-      "১০ সেকেন্ড অপেক্ষা করুন।";
+    if ($("modalStatus")) {
+      $("modalStatus").textContent =
+        "১০ সেকেন্ড অপেক্ষা করুন।";
+    }
 
-    $("verifyTaskBtn")?.classList.add("hidden");
-    $("cancelTaskBtn")?.classList.remove("hidden");
+    $("verifyTaskBtn")?.classList.add(
+      "hidden"
+    );
 
+    $("cancelTaskBtn")?.classList.remove(
+      "hidden"
+    );
+
+    startHeartbeat();
     startCountdown();
+  }
+
+  function startHeartbeat() {
+    stopHeartbeat();
+
+    state.heartbeatTimer =
+      setInterval(
+        async () => {
+          if (
+            !state.activeTask ||
+            !state.session
+          ) {
+            return;
+          }
+
+          const id =
+            state.activeTask.id ||
+            state.activeTask._id;
+
+          try {
+            await api(
+              `/api/tasks/${encodeURIComponent(
+                id
+              )}/heartbeat`,
+              {
+                method: "POST"
+              }
+            );
+          } catch (error) {
+            console.warn(
+              "Heartbeat:",
+              error.message
+            );
+          }
+        },
+        4000
+      );
+  }
+
+  function stopHeartbeat() {
+    if (state.heartbeatTimer) {
+      clearInterval(
+        state.heartbeatTimer
+      );
+
+      state.heartbeatTimer = null;
+    }
   }
 
   function startCountdown() {
@@ -627,89 +943,148 @@
     const totalSeconds = 10;
     let remaining = totalSeconds;
 
-    const countdown = $("countdown");
-    const progress = $("progressBar");
+    const countdown =
+      $("countdown");
+
+    const progress =
+      $("progressBar");
 
     if (countdown) {
-      countdown.textContent = remaining;
+      countdown.textContent =
+        remaining;
     }
 
     if (progress) {
-      progress.style.width = "0%";
+      progress.style.width =
+        "0%";
     }
 
-    state.taskTimer = setInterval(() => {
-      remaining -= 1;
+    state.taskTimer =
+      setInterval(() => {
+        remaining -= 1;
 
-      if (countdown) {
-        countdown.textContent = Math.max(remaining, 0);
-      }
-
-      if (progress) {
-        const completed =
-          ((totalSeconds - remaining) / totalSeconds) * 100;
-
-        progress.style.width =
-          `${Math.min(completed, 100)}%`;
-      }
-
-      if (remaining <= 0) {
-        stopTaskTimer();
-
-        if ($("modalStatus")) {
-          $("modalStatus").textContent =
-            "Task Complete চাপলে Task submit হবে।";
+        if (countdown) {
+          countdown.textContent =
+            Math.max(
+              remaining,
+              0
+            );
         }
 
-        $("verifyTaskBtn")?.classList.remove("hidden");
-        $("cancelTaskBtn")?.classList.add("hidden");
-      }
-    }, 1000);
+        if (progress) {
+          const completed =
+            (
+              (totalSeconds -
+                remaining) /
+              totalSeconds
+            ) * 100;
+
+          progress.style.width =
+            `${Math.min(
+              completed,
+              100
+            )}%`;
+        }
+
+        if (remaining <= 0) {
+          stopTaskTimer();
+
+          if ($("modalStatus")) {
+            $("modalStatus").textContent =
+              "Task Complete চাপলে Task submit হবে।";
+          }
+
+          $("verifyTaskBtn")?.classList.remove(
+            "hidden"
+          );
+
+          $("cancelTaskBtn")?.classList.add(
+            "hidden"
+          );
+        }
+      }, 1000);
   }
 
   function stopTaskTimer() {
     if (state.taskTimer) {
-      clearInterval(state.taskTimer);
+      clearInterval(
+        state.taskTimer
+      );
+
       state.taskTimer = null;
     }
   }
 
-  function closeTaskModal() {
+  async function closeTaskModal() {
     stopTaskTimer();
+    stopHeartbeat();
+
+    if (
+      state.activeTask &&
+      state.session
+    ) {
+      const id =
+        state.activeTask.id ||
+        state.activeTask._id;
+
+      try {
+        await api(
+          `/api/tasks/${encodeURIComponent(
+            id
+          )}/cancel`,
+          {
+            method: "POST"
+          }
+        );
+      } catch (error) {
+        console.warn(
+          "Cancel:",
+          error.message
+        );
+      }
+    }
 
     state.activeTask = null;
     state.taskStartedAt = null;
 
-    $("taskModal")?.classList.add("hidden");
+    $("taskModal")?.classList.add(
+      "hidden"
+    );
   }
 
   async function completeTask() {
-    if (!state.activeTask || !state.user) {
+    if (
+      !state.activeTask ||
+      !state.user ||
+      !state.session
+    ) {
       return;
     }
 
-    const task = state.activeTask;
+    const task =
+      state.activeTask;
 
-    const userId =
-      state.user.id ||
-      state.user.userId ||
-      state.user.name;
+    const id =
+      task.id ||
+      task._id;
 
-    $("verifyTaskBtn")?.setAttribute(
-      "disabled",
-      "disabled"
-    );
+    const button =
+      $("verifyTaskBtn");
+
+    if (button) {
+      button.disabled = true;
+    }
 
     try {
-      const data = await api("/api/tasks/complete", {
-        method: "POST",
-        body: {
-          userId,
-          taskId: task.id || task._id,
-          startedAt: state.taskStartedAt,
-          completedAt: Date.now()
-        }
-      });
+      const data =
+        await api(
+          `/api/tasks/${encodeURIComponent(
+            id
+          )}/complete`,
+          {
+            method: "POST"
+          }
+        );
 
       if (data.user) {
         state.user = {
@@ -721,37 +1096,32 @@
         updateProfileUI();
       }
 
-      if (data.balance !== undefined) {
-        state.balance = Number(data.balance || 0);
-      }
-
-      if (data.todayIncome !== undefined) {
-        state.todayIncome = Number(
-          data.todayIncome || 0
-        );
-      }
-
-      if (data.totalIncome !== undefined) {
-        state.totalIncome = Number(
-          data.totalIncome || 0
-        );
-      }
-
-      if (data.completedCount !== undefined) {
-        state.completedCount = Number(
-          data.completedCount || 0
-        );
+      if (
+        data.balance !== undefined
+      ) {
+        state.balance =
+          Number(
+            data.balance || 0
+          );
       }
 
       alert(
         data.message ||
-        "Task সফলভাবে complete হয়েছে।"
+        `Task সফলভাবে complete হয়েছে। Reward: ${money(
+          data.reward || task.reward
+        )}`
       );
 
-      closeTaskModal();
-      await loadTasks();
-      await loadHistory();
-      renderAll();
+      stopHeartbeat();
+
+      state.activeTask = null;
+      state.taskStartedAt = null;
+
+      $("taskModal")?.classList.add(
+        "hidden"
+      );
+
+      await loadDashboard();
 
     } catch (error) {
       alert(
@@ -759,16 +1129,16 @@
         "Task complete করা যায়নি।"
       );
     } finally {
-      $("verifyTaskBtn")?.removeAttribute(
-        "disabled"
-      );
+      if (button) {
+        button.disabled = false;
+      }
     }
   }
 
   async function submitWithdrawal(event) {
     event.preventDefault();
 
-    if (!state.user) {
+    if (!state.user || !state.session) {
       showMessage(
         $("withdrawMessage"),
         "আগে Login করুন।"
@@ -776,11 +1146,19 @@
       return;
     }
 
-    const method = $("withdrawMethod")?.value;
-    const number = $("withdrawNumber")?.value.trim();
-    const amount = Number(
-      $("withdrawAmount")?.value || 0
-    );
+    const method =
+      $("withdrawMethod")?.value;
+
+    const number =
+      $("withdrawNumber")
+        ?.value
+        .trim();
+
+    const amount =
+      Number(
+        $("withdrawAmount")
+          ?.value || 0
+      );
 
     if (!number) {
       showMessage(
@@ -814,17 +1192,14 @@
       return;
     }
 
-    const userId =
-      state.user.id ||
-      state.user.userId ||
-      state.user.name;
-
     const button =
       event.target.querySelector(
         'button[type="submit"]'
       );
 
-    if (button) button.disabled = true;
+    if (button) {
+      button.disabled = true;
+    }
 
     showMessage(
       $("withdrawMessage"),
@@ -833,22 +1208,33 @@
     );
 
     try {
-      const data = await api("/api/withdrawals", {
-        method: "POST",
-        body: {
-          userId,
-          method,
-          accountNumber: number,
-          amount
-        }
-      });
+      const data =
+        await api(
+          "/api/withdrawals",
+          {
+            method: "POST",
+            body: {
+              method,
+              accountNumber: number,
+              amount
+            }
+          }
+        );
 
-      if (data.balance !== undefined) {
-        state.balance = Number(data.balance || 0);
+      if (
+        data.balance !== undefined
+      ) {
+        state.balance =
+          Number(
+            data.balance || 0
+          );
       }
 
-      if (Array.isArray(data.history)) {
-        state.history = data.history;
+      if (
+        Array.isArray(data.history)
+      ) {
+        state.history =
+          data.history;
       }
 
       showMessage(
@@ -869,38 +1255,75 @@
         "Withdrawal submit করা যায়নি।"
       );
     } finally {
-      if (button) button.disabled = false;
+      if (button) {
+        button.disabled = false;
+      }
     }
   }
 
   function setupAuthTabs() {
-    document.querySelectorAll(".tab-btn").forEach((button) => {
-      button.addEventListener("click", () => {
-        const type = button.dataset.auth;
+    document
+      .querySelectorAll(".tab-btn")
+      .forEach((button) => {
 
-        document.querySelectorAll(".tab-btn").forEach((btn) => {
-          btn.classList.toggle(
-            "active",
-            btn === button
-          );
-        });
+        button.addEventListener(
+          "click",
+          () => {
 
-        if (type === "login") {
-          $("loginForm")?.classList.remove("hidden");
-          $("registerForm")?.classList.add("hidden");
-        } else {
-          $("loginForm")?.classList.add("hidden");
-          $("registerForm")?.classList.remove("hidden");
-        }
+            const type =
+              button.dataset.auth;
+
+            document
+              .querySelectorAll(
+                ".tab-btn"
+              )
+              .forEach((btn) => {
+                btn.classList.toggle(
+                  "active",
+                  btn === button
+                );
+              });
+
+            if (type === "login") {
+
+              $("loginForm")
+                ?.classList.remove(
+                  "hidden"
+                );
+
+              $("registerForm")
+                ?.classList.add(
+                  "hidden"
+                );
+
+            } else {
+
+              $("loginForm")
+                ?.classList.add(
+                  "hidden"
+                );
+
+              $("registerForm")
+                ?.classList.remove(
+                  "hidden"
+                );
+            }
+          }
+        );
       });
-    });
   }
 
   async function handleLogin(event) {
     event.preventDefault();
 
-    const name = $("loginName")?.value.trim();
-    const password = $("loginPassword")?.value;
+    const name =
+      $("loginName")
+        ?.value
+        .trim();
+
+    const password =
+      $("loginPassword")
+        ?.value;
 
     if (!name || !password) {
       showMessage(
@@ -910,28 +1333,33 @@
       return;
     }
 
+    const button =
+      event.target.querySelector(
+        'button[type="submit"]'
+      );
+
+    if (button) {
+      button.disabled = true;
+    }
+
     showMessage(
       $("loginMessage"),
       "Login হচ্ছে...",
       true
     );
 
-    const button =
-      event.target.querySelector(
-        'button[type="submit"]'
-      );
-
-    if (button) button.disabled = true;
-
     try {
-      const data = await api("/api/auth/login", {
-        method: "POST",
-        body: {
-          name,
-          username: name,
-          password
-        }
-      });
+      const data =
+        await api(
+          "/api/login",
+          {
+            method: "POST",
+            body: {
+              name,
+              password
+            }
+          }
+        );
 
       if (!data.user) {
         throw new Error(
@@ -939,7 +1367,16 @@
         );
       }
 
-      setLoggedIn(data.user);
+      if (!data.session) {
+        throw new Error(
+          "Server থেকে login session পাওয়া যায়নি।"
+        );
+      }
+
+      setLoggedIn(
+        data.user,
+        data.session
+      );
 
       showMessage(
         $("loginMessage"),
@@ -950,19 +1387,31 @@
     } catch (error) {
       showMessage(
         $("loginMessage"),
-        error.message || "Login failed।"
+        error.message ||
+        "Login failed।"
       );
     } finally {
-      if (button) button.disabled = false;
+      if (button) {
+        button.disabled = false;
+      }
     }
   }
 
   async function handleRegister(event) {
     event.preventDefault();
 
-    const name = $("registerName")?.value.trim();
-    const password = $("registerPassword")?.value;
-    const confirm = $("registerConfirm")?.value;
+    const name =
+      $("registerName")
+        ?.value
+        .trim();
+
+    const password =
+      $("registerPassword")
+        ?.value;
+
+    const confirm =
+      $("registerConfirm")
+        ?.value;
 
     if (!name || name.length < 2) {
       showMessage(
@@ -972,7 +1421,10 @@
       return;
     }
 
-    if (!password || password.length < 6) {
+    if (
+      !password ||
+      password.length < 6
+    ) {
       showMessage(
         $("registerMessage"),
         "Password কমপক্ষে 6 অক্ষরের হতে হবে।"
@@ -993,7 +1445,9 @@
         'button[type="submit"]'
       );
 
-    if (button) button.disabled = true;
+    if (button) {
+      button.disabled = true;
+    }
 
     showMessage(
       $("registerMessage"),
@@ -1002,31 +1456,40 @@
     );
 
     try {
-      const data = await api("/api/auth/register", {
-        method: "POST",
-        body: {
-          name,
-          username: name,
-          password
-        }
-      });
-
-      if (data.user) {
-        setLoggedIn(data.user);
-      } else {
-        showMessage(
-          $("registerMessage"),
-          data.message ||
-          "Registration successful। এখন Login করুন।",
-          true
+      const data =
+        await api(
+          "/api/register",
+          {
+            method: "POST",
+            body: {
+              name,
+              password
+            }
+          }
         );
 
-        $("loginName").value = name;
-
-        document
-          .querySelector('[data-auth="login"]')
-          ?.click();
+      if (!data.user) {
+        throw new Error(
+          "Server থেকে user information পাওয়া যায়নি।"
+        );
       }
+
+      if (!data.session) {
+        throw new Error(
+          "Server থেকে registration session পাওয়া যায়নি।"
+        );
+      }
+
+      setLoggedIn(
+        data.user,
+        data.session
+      );
+
+      showMessage(
+        $("registerMessage"),
+        "Registration successful।",
+        true
+      );
 
     } catch (error) {
       showMessage(
@@ -1035,16 +1498,26 @@
         "Registration failed।"
       );
     } finally {
-      if (button) button.disabled = false;
+      if (button) {
+        button.disabled = false;
+      }
     }
   }
 
   function setupNavigation() {
-    document.querySelectorAll(".nav-btn").forEach((button) => {
-      button.addEventListener("click", () => {
-        showSection(button.dataset.section);
+    document
+      .querySelectorAll(".nav-btn")
+      .forEach((button) => {
+
+        button.addEventListener(
+          "click",
+          () => {
+            showSection(
+              button.dataset.section
+            );
+          }
+        );
       });
-    });
 
     $("homeTaskBtn")?.addEventListener(
       "click",
@@ -1053,73 +1526,119 @@
   }
 
   function setupButtons() {
-    $("headerLogout")?.addEventListener(
-      "click",
-      logout
-    );
+    $("headerLogout")
+      ?.addEventListener(
+        "click",
+        logout
+      );
 
-    $("profileLogout")?.addEventListener(
-      "click",
-      logout
-    );
+    $("profileLogout")
+      ?.addEventListener(
+        "click",
+        logout
+      );
 
-    $("withdrawBtn")?.addEventListener(
-      "click",
-      () => showSection("withdraw")
-    );
+    $("withdrawBtn")
+      ?.addEventListener(
+        "click",
+        () => showSection("withdraw")
+      );
 
-    $("withdrawForm")?.addEventListener(
-      "submit",
-      submitWithdrawal
-    );
+    $("withdrawForm")
+      ?.addEventListener(
+        "submit",
+        submitWithdrawal
+      );
 
-    $("closeTaskModal")?.addEventListener(
-      "click",
-      closeTaskModal
-    );
+    $("closeTaskModal")
+      ?.addEventListener(
+        "click",
+        closeTaskModal
+      );
 
-    $("cancelTaskBtn")?.addEventListener(
-      "click",
-      closeTaskModal
-    );
+    $("cancelTaskBtn")
+      ?.addEventListener(
+        "click",
+        closeTaskModal
+      );
 
-    $("verifyTaskBtn")?.addEventListener(
-      "click",
-      completeTask
-    );
+    $("verifyTaskBtn")
+      ?.addEventListener(
+        "click",
+        completeTask
+      );
 
-    $("taskModal")?.addEventListener(
-      "click",
-      (event) => {
-        if (event.target === $("taskModal")) {
-          closeTaskModal();
+    $("taskModal")
+      ?.addEventListener(
+        "click",
+        (event) => {
+          if (
+            event.target ===
+            $("taskModal")
+          ) {
+            closeTaskModal();
+          }
         }
-      }
-    );
+      );
   }
 
-  function init() {
+  async function init() {
     setupAuthTabs();
     setupNavigation();
     setupButtons();
 
-    $("loginForm")?.addEventListener(
-      "submit",
-      handleLogin
-    );
+    $("loginForm")
+      ?.addEventListener(
+        "submit",
+        handleLogin
+      );
 
-    $("registerForm")?.addEventListener(
-      "submit",
-      handleRegister
-    );
+    $("registerForm")
+      ?.addEventListener(
+        "submit",
+        handleRegister
+      );
 
-    const savedUser = loadSavedUser();
+    state.session =
+      loadSession();
 
-    if (savedUser) {
-      setLoggedIn(savedUser);
+    const savedUser =
+      loadSavedUser();
+
+    if (
+      state.session &&
+      savedUser
+    ) {
+      state.user =
+        savedUser;
+
+      $("authPage")
+        ?.classList.add(
+          "hidden"
+        );
+
+      $("dashboard")
+        ?.classList.remove(
+          "hidden"
+        );
+
+      updateProfileUI();
+
+      await loadDashboard();
+
     } else {
-      $("dashboard")?.classList.add("hidden");
-      $("authPage")?.classList.remove("hidden");
+      clearSession();
+      clearSavedUser();
+
+      $("dashboard")
+        ?.classList.add(
+          "hidden"
+        );
+
+      $("authPage")
+        ?.classList.remove(
+          "hidden"
+        );
     }
   }
 
@@ -1127,4 +1646,5 @@
     "DOMContentLoaded",
     init
   );
+
 })();
