@@ -3,12 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1677f2">
+  <meta name="theme-color" content="#0f172a">
   <title>Masud JR Official</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
   <link
     href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
@@ -24,6 +23,7 @@
     <section id="authPage" class="auth-shell">
       <div class="auth-card">
 
+        <!-- Profile Photo -->
         <img
           class="brand-avatar"
           id="authAvatar"
@@ -31,10 +31,16 @@
           alt="Masud JR"
         >
 
+        <div class="brand-badge">✦ OFFICIAL ✦</div>
+
         <h1>Masud JR Official</h1>
 
         <p class="tagline">
-          আপনার কাজ, আপনার হিসাব, আপনার ড্যাশবোর্ড
+          আপনার সময়, আপনার কাজ — এগিয়ে চলুন নিজের গতিতে
+        </p>
+
+        <p class="tagline-sub">
+          সহজ কাজ • পরিষ্কার হিসাব • এক জায়গায় সবকিছু
         </p>
 
         <div class="auth-tabs">
@@ -77,7 +83,7 @@
           <input
             id="loginPassword"
             type="password"
-            placeholder="পাসওয়ার্ড"
+            placeholder="পাসওয়ার্ড লিখুন"
             autocomplete="current-password"
             required
           >
@@ -101,6 +107,13 @@
           id="registerForm"
           class="auth-form hidden"
         >
+
+          <div class="register-banner">
+            <strong>🚀 আজ থেকেই শুরু করুন</strong>
+            <span>
+              ঘরে বসে কাজ শেখার ও করার সুযোগ — দেরি না করে এখনই Registration করুন।
+            </span>
+          </div>
 
           <label for="registerName">
             নাম
@@ -155,15 +168,18 @@
 
         </form>
 
+        <div class="auth-footer">
+          <span>Masud JR Official</span>
+          <span>•</span>
+          <span>Secure Access</span>
+        </div>
+
       </div>
     </section>
 
 
     <!-- ================= DASHBOARD ================= -->
-    <section
-      id="dashboard"
-      class="dashboard hidden"
-    >
+    <section id="dashboard" class="dashboard hidden">
 
       <!-- TOP BAR -->
       <header class="topbar">
@@ -209,53 +225,43 @@
           class="page-section active-section"
         >
 
-          <!-- NEW BLUE HERO -->
-          <div class="mj-home-hero">
+          <div class="hero-card">
 
-            <button
-              id="supportTrigger"
-              class="mj-support-trigger"
-              type="button"
-              aria-label="Support Team"
-            >
-              🎧
-              <span class="support-label">
-                Support Team
-              </span>
-              <span>
-                ›
-              </span>
-            </button>
+            <div>
 
-            <div class="mj-hero-content">
-
-              <img
-                class="mj-hero-avatar"
-                src="profile.jpg"
-                alt="Masud JR"
-              >
-
-              <h1 class="mj-hero-title">
+              <span class="pill">
                 Masud JR Official
-                <span class="mj-verified">
-                  ✓
-                </span>
-              </h1>
+              </span>
 
-              <p class="mj-hero-tagline">
-                প্রতিদিন টাকা কমপ্লিট করলেই সাথে সাথে পাচ্ছেন টাকা!
-                এখানে অসংখ্য টাস্ক রয়েছে 💐
+              <h2>
+                কাজ করুন, হিসাব দেখুন
+              </h2>
+
+              <p>
+                আপনার Task, Balance ও Withdrawal এক জায়গায়।
               </p>
+
+            </div>
+
+            <div class="hero-balance">
+
+              <small>
+                মোট ব্যালেন্স
+              </small>
+
+              <strong id="homeBalance">
+                ৳0
+              </strong>
 
             </div>
 
           </div>
 
 
-          <!-- STATS -->
           <div class="stats-grid">
 
             <div class="stat-card">
+
               <span>
                 আজকের আয়
               </span>
@@ -263,10 +269,12 @@
               <strong id="todayIncome">
                 ৳0
               </strong>
+
             </div>
 
 
             <div class="stat-card">
+
               <span>
                 মোট আয়
               </span>
@@ -274,10 +282,12 @@
               <strong id="totalIncome">
                 ৳0
               </strong>
+
             </div>
 
 
             <div class="stat-card">
+
               <span>
                 Completed
               </span>
@@ -285,22 +295,21 @@
               <strong id="completedCount">
                 0
               </strong>
+
             </div>
 
           </div>
 
 
-          <!-- TASK BUTTON -->
           <button
             id="homeTaskBtn"
             class="wide-action"
             type="button"
           >
-            🚚 &nbsp; Trucks / Tasks
+            🚚 Trucks / Tasks
           </button>
 
 
-          <!-- NOTICE -->
           <div class="notice-card compact">
 
             <h3>
@@ -308,8 +317,7 @@
             </h3>
 
             <div id="homeNotice">
-              Masud JR Official-এ স্বাগতম।
-              নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে পাবেন।
+              নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে দেখা যাবে।
             </div>
 
           </div>
@@ -326,6 +334,7 @@
           <div class="section-head">
 
             <div>
+
               <h2>
                 🚚 Trucks / Tasks
               </h2>
@@ -333,6 +342,7 @@
               <p>
                 সব কাজ এক জায়গায়
               </p>
+
             </div>
 
           </div>
@@ -361,10 +371,10 @@
               ৳0
             </strong>
 
-
             <div class="balance-subgrid">
 
               <div>
+
                 <small>
                   আজকের আয়
                 </small>
@@ -372,10 +382,12 @@
                 <b id="balanceToday">
                   ৳0
                 </b>
+
               </div>
 
 
               <div>
+
                 <small>
                   মোট আয়
                 </small>
@@ -383,6 +395,7 @@
                 <b id="balanceTotal">
                   ৳0
                 </b>
+
               </div>
 
             </div>
@@ -399,7 +412,6 @@
           </div>
 
 
-          <!-- PROCESSING FEE -->
           <div
             id="feeBox"
             class="fee-box hidden"
@@ -417,12 +429,9 @@
 
             </div>
 
-
             <p>
-              প্রথম Withdrawal-এর আগে ৳70 Processing Fee
-              manual verification-এর জন্য জমা দিন।
+              প্রথম Withdrawal-এর আগে ৳70 Processing Fee manual verification-এর জন্য জমা দিন।
             </p>
-
 
             <div class="fee-number">
 
@@ -439,7 +448,6 @@
 
             </div>
 
-
             <label for="feeTxId">
               Transaction ID
             </label>
@@ -449,7 +457,6 @@
               placeholder="Transaction ID লিখুন"
             >
 
-
             <button
               id="submitFeeBtn"
               class="primary-btn"
@@ -457,7 +464,6 @@
             >
               Submit Payment
             </button>
-
 
             <p
               id="feeMessage"
@@ -491,7 +497,6 @@
 
           </div>
 
-
           <div
             id="historyList"
             class="history-list"
@@ -508,188 +513,44 @@
 
           <div class="profile-card-large">
 
-            <button
-              id="profileClose"
-              class="mj-profile-close"
-              type="button"
-              aria-label="Close"
+            <img
+              class="avatar big"
+              id="profileAvatar"
+              src="profile.jpg"
+              alt="Masud JR"
             >
-              ×
+
+            <h2 id="profileName">
+              User
+            </h2>
+
+            <p>
+              User ID:
+              <span id="profileId">
+                -
+              </span>
+            </p>
+
+            <div class="profile-meta">
+
+              <span>
+                Joined
+              </span>
+
+              <strong id="profileJoined">
+                -
+              </strong>
+
+            </div>
+
+
+            <button
+              id="profileLogout"
+              class="logout-btn"
+              type="button"
+            >
+              Logout
             </button>
-
-
-            <div class="mj-profile-cover">
-
-              <div class="mj-profile-main">
-
-                <img
-                  class="mj-profile-avatar"
-                  id="profileAvatar"
-                  src="profile.jpg"
-                  alt="Masud JR"
-                >
-
-                <div>
-
-                  <h2 id="profileName">
-                    User
-                  </h2>
-
-                  <div
-                    class="mj-user-id"
-                    id="profileId"
-                  >
-                    -
-                  </div>
-
-                  <div class="mj-verified-line">
-                    👑 Verified User
-                  </div>
-
-                </div>
-
-              </div>
-
-            </div>
-
-
-            <!-- PROFILE STATS -->
-            <div class="mj-profile-stats">
-
-              <div class="mj-profile-stat">
-
-                <small>
-                  মোট ব্যালেন্স
-                </small>
-
-                <strong id="profileBalance">
-                  ৳0
-                </strong>
-
-              </div>
-
-
-              <div class="mj-profile-stat">
-
-                <small>
-                  সম্পন্ন টাস্ক
-                </small>
-
-                <strong id="profileCompleted">
-                  0
-                </strong>
-
-              </div>
-
-
-              <div class="mj-profile-stat">
-
-                <small>
-                  মোট আয়
-                </small>
-
-                <strong id="profileIncome">
-                  ৳0
-                </strong>
-
-              </div>
-
-            </div>
-
-
-            <!-- PROFILE INFO -->
-            <div class="mj-profile-info">
-
-              <div class="mj-profile-info-row">
-
-                <span>
-                  👤 User ID
-                </span>
-
-                <strong id="profileIdCopy">
-                  -
-                </strong>
-
-              </div>
-
-
-              <div class="mj-profile-info-row">
-
-                <span>
-                  📅 Joined
-                </span>
-
-                <strong id="profileJoined">
-                  -
-                </strong>
-
-              </div>
-
-
-              <div class="mj-profile-info-row">
-
-                <span>
-                  🛡️ Status
-                </span>
-
-                <strong>
-                  🟢 Active
-                </strong>
-
-              </div>
-
-            </div>
-
-
-            <!-- PROFILE ACTIONS -->
-            <div class="mj-profile-actions">
-
-              <button
-                id="profileSupportBtn"
-                class="mj-profile-action"
-                type="button"
-              >
-
-                🎧
-
-                <span>
-                  Support Team
-                  <br>
-                  <small>
-                    যেকোনো সমস্যায় যোগাযোগ করুন
-                  </small>
-                </span>
-
-                <b>
-                  ›
-                </b>
-
-              </button>
-
-
-              <button
-                id="profileLogout"
-                class="mj-profile-action logout"
-                type="button"
-              >
-
-                🚪
-
-                <span>
-                  Logout
-                  <br>
-                  <small>
-                    আপনার অ্যাকাউন্ট থেকে লগআউট করুন
-                  </small>
-                </span>
-
-                <b>
-                  ›
-                </b>
-
-              </button>
-
-            </div>
 
           </div>
 
@@ -718,7 +579,6 @@
 
           </div>
 
-
           <div
             id="noticeList"
             class="notice-list"
@@ -727,7 +587,7 @@
         </section>
 
 
-        <!-- ================= SERVICE ================= -->
+        <!-- ================= CUSTOMER SERVICE ================= -->
         <section
           id="section-service"
           class="page-section"
@@ -750,22 +610,24 @@
           </div>
 
 
-          <button
+          <a
             class="contact-card"
-            data-support="messenger"
-            type="button"
+            href="https://m.me/masud.11.jr"
+            target="_blank"
+            rel="noopener"
           >
-            Messenger
-          </button>
+            💬 Messenger
+          </a>
 
 
-          <button
+          <a
             class="contact-card whatsapp"
-            data-support="whatsapp"
-            type="button"
+            href="https://wa.me/8801961504587"
+            target="_blank"
+            rel="noopener"
           >
-            WhatsApp: 01961504587
-          </button>
+            📱 WhatsApp: 01961504587
+          </a>
 
         </section>
 
@@ -846,8 +708,7 @@
 
 
             <div class="fee-note">
-              First withdrawal processing fee:
-              ৳70 (manual verification)
+              First withdrawal processing fee: ৳70 (manual verification)
             </div>
 
 
@@ -937,423 +798,95 @@
 
     </section>
 
-  </div>
 
-
-  <!-- ================= SUPPORT POPUP ================= -->
-  <div
-    id="supportOverlay"
-    class="mj-overlay"
-    aria-hidden="true"
-  >
-
+    <!-- ================= TASK MODAL ================= -->
     <div
-      class="mj-support-panel"
+      id="taskModal"
+      class="modal hidden"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="supportTitle"
     >
 
-      <div class="mj-panel-head">
-
-        <h3 id="supportTitle">
-          🎧 Support Team
-        </h3>
+      <div class="modal-card">
 
         <button
-          id="supportClose"
-          class="mj-close"
+          id="closeTaskModal"
+          class="modal-close"
           type="button"
-          aria-label="Close"
         >
           ×
         </button>
 
-      </div>
+
+        <div class="modal-icon">
+          ⏱️
+        </div>
 
 
-      <div class="mj-panel-body">
+        <h3 id="modalTaskTitle">
+          Task
+        </h3>
 
-        <p>
-          যেকোনো সমস্যায় আমাদের সাথে যোগাযোগ করুন
+
+        <p id="modalTaskInfo">
+          Task চলমান...
         </p>
 
 
-        <!-- WHATSAPP -->
-        <button
-          class="mj-support-option whatsapp"
-          data-support="whatsapp"
-          type="button"
-        >
-
-          <span>
-
-            <span class="mj-support-icon">
-              ◉
-            </span>
-
-            &nbsp; WhatsApp
-
-            <small>
-              01961504587
-            </small>
-
-          </span>
-
-          <span class="mj-arrow">
-            ›
-          </span>
-
-        </button>
-
-
-        <!-- MESSENGER -->
-        <button
-          class="mj-support-option messenger"
-          data-support="messenger"
-          type="button"
-        >
-
-          <span>
-
-            <span class="mj-support-icon">
-              ◆
-            </span>
-
-            &nbsp; Facebook Messenger
-
-            <small>
-              মেসেঞ্জারে যোগাযোগ করুন
-            </small>
-
-          </span>
-
-          <span class="mj-arrow">
-            ›
-          </span>
-
-        </button>
-
-      </div>
-
-    </div>
-
-  </div>
-
-
-  <!-- ================= TASK MODAL ================= -->
-  <div
-    id="taskModal"
-    class="modal hidden"
-    role="dialog"
-    aria-modal="true"
-  >
-
-    <div class="modal-card">
-
-      <button
-        id="closeTaskModal"
-        class="modal-close"
-        type="button"
-      >
-        ×
-      </button>
-
-
-      <div class="modal-icon">
-        ⏱️
-      </div>
-
-
-      <h3 id="modalTaskTitle">
-        Task
-      </h3>
-
-
-      <p id="modalTaskInfo">
-        Task চলমান...
-      </p>
-
-
-      <div
-        class="countdown"
-        id="countdown"
-      >
-        10
-      </div>
-
-
-      <div class="progress-track">
-
         <div
-          id="progressBar"
-          class="progress-bar"
-        ></div>
+          class="countdown"
+          id="countdown"
+        >
+          10
+        </div>
+
+
+        <div class="progress-track">
+
+          <div
+            id="progressBar"
+            class="progress-bar"
+          ></div>
+
+        </div>
+
+
+        <p
+          id="modalStatus"
+          class="modal-status"
+        >
+          Task Complete লেখা আসা পর্যন্ত অপেক্ষা করুন।
+        </p>
+
+
+        <button
+          id="cancelTaskBtn"
+          class="cancel-btn"
+          type="button"
+        >
+          Cancel
+        </button>
+
+
+        <button
+          id="verifyTaskBtn"
+          class="primary-btn hidden"
+          type="button"
+        >
+          Task Complete
+        </button>
 
       </div>
 
-
-      <p
-        id="modalStatus"
-        class="modal-status"
-      >
-        Task Complete লেখা আসা পর্যন্ত অপেক্ষা করুন।
-      </p>
-
-
-      <button
-        id="cancelTaskBtn"
-        class="cancel-btn"
-        type="button"
-      >
-        Cancel
-      </button>
-
-
-      <button
-        id="verifyTaskBtn"
-        class="primary-btn hidden"
-        type="button"
-      >
-        Task Complete
-      </button>
-
     </div>
 
+
+    <script>
+      window.API_BASE = 'https://masud-jr-official-online.onrender.com';
+    </script>
+
+    <script src="script.js"></script>
+
   </div>
-
-
-  <!-- ================= API ================= -->
-  <script>
-    window.API_BASE = "https://masud-jr-official-online.onrender.com";
-  </script>
-
-
-  <!-- EXISTING SCRIPT -->
-  <script src="script.js"></script>
-
-
-  <!-- ================= SUPPORT / PROFILE UI ================= -->
-  <script>
-    (() => {
-      "use strict";
-
-      const overlay =
-        document.getElementById("supportOverlay");
-
-      const openSupport = () => {
-        if (!overlay) return;
-
-        overlay.classList.add("open");
-        overlay.setAttribute(
-          "aria-hidden",
-          "false"
-        );
-      };
-
-
-      const closeSupport = () => {
-        if (!overlay) return;
-
-        overlay.classList.remove("open");
-        overlay.setAttribute(
-          "aria-hidden",
-          "true"
-        );
-      };
-
-
-      document
-        .getElementById("supportTrigger")
-        ?.addEventListener(
-          "click",
-          openSupport
-        );
-
-
-      document
-        .getElementById("profileSupportBtn")
-        ?.addEventListener(
-          "click",
-          openSupport
-        );
-
-
-      document
-        .getElementById("supportClose")
-        ?.addEventListener(
-          "click",
-          closeSupport
-        );
-
-
-      overlay?.addEventListener(
-        "click",
-        (event) => {
-          if (event.target === overlay) {
-            closeSupport();
-          }
-        }
-      );
-
-
-      document.addEventListener(
-        "keydown",
-        (event) => {
-
-          if (event.key === "Escape") {
-
-            closeSupport();
-
-            document
-              .getElementById("profileClose")
-              ?.click();
-
-          }
-
-        }
-      );
-
-
-      const profileSection =
-        document.getElementById(
-          "section-profile"
-        );
-
-
-      const closeProfile = () => {
-
-        if (!profileSection) return;
-
-        profileSection.classList.remove(
-          "active-section"
-        );
-
-
-        document
-          .querySelectorAll(".nav-btn")
-          .forEach((button) => {
-
-            button.classList.toggle(
-              "active",
-              button.dataset.section === "home"
-            );
-
-          });
-
-
-        document
-          .getElementById("section-home")
-          ?.classList.add(
-            "active-section"
-          );
-
-      };
-
-
-      document
-        .getElementById("profileClose")
-        ?.addEventListener(
-          "click",
-          closeProfile
-        );
-
-
-      const syncProfileStats = () => {
-
-        const copy = (
-          sourceId,
-          targetId
-        ) => {
-
-          const source =
-            document.getElementById(
-              sourceId
-            );
-
-          const target =
-            document.getElementById(
-              targetId
-            );
-
-          if (
-            source &&
-            target
-          ) {
-            target.textContent =
-              source.textContent;
-          }
-
-        };
-
-
-        copy(
-          "homeBalance",
-          "profileBalance"
-        );
-
-        copy(
-          "completedCount",
-          "profileCompleted"
-        );
-
-        copy(
-          "totalIncome",
-          "profileIncome"
-        );
-
-        copy(
-          "profileId",
-          "profileIdCopy"
-        );
-
-      };
-
-
-      const observer =
-        new MutationObserver(
-          syncProfileStats
-        );
-
-
-      [
-        "homeBalance",
-        "completedCount",
-        "totalIncome",
-        "profileId",
-        "profileName",
-        "profileJoined"
-      ].forEach((id) => {
-
-        const element =
-          document.getElementById(id);
-
-        if (element) {
-
-          observer.observe(
-            element,
-            {
-              childList: true,
-              characterData: true,
-              subtree: true
-            }
-          );
-
-        }
-
-      });
-
-
-      setInterval(
-        syncProfileStats,
-        700
-      );
-
-
-      syncProfileStats();
-
-    })();
-  </script>
-
 </body>
 </html>
