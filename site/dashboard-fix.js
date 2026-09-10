@@ -313,7 +313,7 @@
 
       if (!overlay) return;
 
-      overlay.classList.remove("active");
+      overlay.classList.remove("open");
       overlay.setAttribute("aria-hidden", "true");
     }
 
