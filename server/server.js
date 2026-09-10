@@ -23,21 +23,496 @@ ensureAdmin();
 const defaultTasks=[['Facebook Like','Facebook','Facebook Like task','https://www.facebook.com/',10],['Facebook Follow','Facebook','Facebook Follow task','https://www.facebook.com/',10],['TikTok Video 1','TikTok','ভিডিও দেখুন ১০ সেকেন্ড','https://www.tiktok.com/',50],['TikTok Video 2','TikTok','ভিডিও দেখুন ১০ সেকেন্ড','https://www.tiktok.com/',50],['TikTok Video 3','TikTok','ভিডিও দেখুন ১০ সেকেন্ড','https://www.tiktok.com/',50],['TikTok Video 4','TikTok','ভিডিও দেখুন ১০ সেকেন্ড','https://www.tiktok.com/',50],['TikTok Video 5','TikTok','ভিডিও দেখুন ১০ সেকেন্ড','https://www.tiktok.com/',50],['TikTok Video 6','TikTok','ভিডিও দেখুন ১০ সেকেন্ড','https://www.tiktok.com/',50],['TikTok Video 7','TikTok','ভিডিও দেখুন ১০ সেকেন্ড','https://www.tiktok.com/',50],['App Install','App','App install task','https://play.google.com/',20],['Website Visit','Website','Website visit task','https://www.google.com/',5]];
 if(q('SELECT COUNT(*) c FROM tasks').get().c===0){const ins=q('INSERT INTO tasks(title,type,description,url,reward,created_at) VALUES(?,?,?,?,?,?)');for(const t of defaultTasks)ins.run(...t,now());}
 if(q('SELECT COUNT(*) c FROM notices').get().c===0)q('INSERT INTO notices(title,message,created_at) VALUES(?,?,?)').run('স্বাগতম','Masud JR Official-এ স্বাগতম। নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে পাবেন।',now());
+app.get('/api/health',(req,res)=>{
+  res.json({
+    ok:true,
+    service:'Masud JR Official API',
+    time:now()
+  });
+});
 
-app.get('/api/health',(req,res)=>res.json({ok:true,service:'Masud JR Official API',time:now()}));
-app.post('/api/register',(req,res)=>{const name=String(req.body.name||'').trim(),password=String(req.body.password||'');if(name.length<2||password.length<6)return res.status(400).json({message:'নাম এবং কমপক্ষে 6 অক্ষরের password দিন।'});if(q('SELECT id FROM users WHERE lower(name)=lower(?)').get(name))return res.status(409).json({message:'এই নাম দিয়ে account আগে থেকেই আছে।'});const info=q('INSERT INTO users(name,password_hash,created_at) VALUES(?,?,?)').run(name,bcrypt.hashSync(password,12),now());const s=token(),exp=new Date(Date.now()+30*864e5).toISOString();q('INSERT INTO user_sessions(session,user_id,created_at,expires_at) VALUES(?,?,?,?)').run(s,info.lastInsertRowid,now(),exp);const u=q('SELECT id,name,balance,blocked,created_at FROM users WHERE id=?').get(info.lastInsertRowid);res.json({session:s,user:u});});
-app.post('/api/login',(req,res)=>{const name=String(req.body.name||'').trim(),password=String(req.body.password||'');const u=q('SELECT * FROM users WHERE lower(name)=lower(?)').get(name);if(!u||!bcrypt.compareSync(password,u.password_hash))return res.status(401).json({message:'Name অথবা password ভুল।'});if(u.blocked)return res.status(403).json({message:'আপনার account blocked।'});const s=token(),exp=new Date(Date.now()+30*864e5).toISOString();q('INSERT INTO user_sessions(session,user_id,created_at,expires_at) VALUES(?,?,?,?)').run(s,u.id,now(),exp);res.json({session:s,user:{id:u.id,name:u.name,balance:u.balance,blocked:u.blocked,created_at:u.created_at}});});
-app.post('/api/logout',(req,res)=>{const s=req.header('x-user-session');if(s)q('DELETE FROM user_sessions WHERE session=?').run(s);res.json({ok:true});});
-app.get('/api/me',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});res.json({user:{id:u.id,name:u.name,balance:u.balance,blocked:u.blocked,created_at:u.created_at}});});
-app.get('/api/dashboard',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});const start=new Date();start.setHours(0,0,0,0);const today=start.toISOString();const todayEarnings=q('SELECT COALESCE(SUM(amount),0) s FROM history WHERE user_id=? AND status="Completed" AND created_at>=?').get(u.id,today).s;const totalE=q('SELECT COALESCE(SUM(amount),0) s FROM history WHERE user_id=? AND status="Completed" AND amount>0').get(u.id).s;const completed=q('SELECT COUNT(*) c FROM task_completions WHERE user_id=?').get(u.id).c;res.json({balance:u.balance,todayEarnings:todayEarnings,totalEarnings:totalE,completedCount:completed});});
-app.get('/api/tasks',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});const rows=q(`SELECT t.*,MAX(c.completed_at) last_completed FROM tasks t LEFT JOIN task_completions c ON c.task_id=t.id AND c.user_id=? WHERE t.enabled=1 GROUP BY t.id ORDER BY t.id`).all(u.id);const tasks=rows.map(r=>{let available_at=null;if(r.last_completed)available_at=new Date(new Date(r.last_completed).getTime()+5*3600e3).toISOString();return {...r,available_at:(available_at&&new Date(available_at)>new Date())?available_at:null};});res.json({tasks});});
-function latestCompletion(u,t){return q('SELECT completed_at FROM task_completions WHERE user_id=? AND task_id=? ORDER BY id DESC LIMIT 1').get(u.id,t.id);}
-app.post('/api/tasks/:id/start',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});const t=q('SELECT * FROM tasks WHERE id=? AND enabled=1').get(req.params.id);if(!t)return res.status(404).json({message:'Task পাওয়া যায়নি'});const last=latestCompletion(u,t);if(last&&Date.now()-Date.parse(last.completed_at)<5*3600e3)return res.status(409).json({message:'এই Task আবার করার জন্য 5 ঘণ্টা অপেক্ষা করুন।'});q(`UPDATE task_attempts SET status='cancelled' WHERE user_id=? AND task_id=? AND status='started'`).run(u.id,t.id);q('INSERT INTO task_attempts(user_id,task_id,started_at,last_heartbeat,status) VALUES(?,?,?,?,?)').run(u.id,t.id,now(),now(),'started');res.json({ok:true,taskId:t.id});});
-app.post('/api/tasks/:id/heartbeat',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});q(`UPDATE task_attempts SET last_heartbeat=? WHERE id=(SELECT id FROM task_attempts WHERE user_id=? AND task_id=? AND status='started' ORDER BY id DESC LIMIT 1)`).run(now(),u.id,req.params.id);res.json({ok:true});});
-app.post('/api/tasks/:id/cancel',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});q(`UPDATE task_attempts SET status='cancelled' WHERE user_id=? AND task_id=? AND status='started'`).run(u.id,req.params.id);res.json({ok:true});});
-app.post('/api/tasks/:id/complete',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});const tx=db.transaction(()=>{const t=q('SELECT * FROM tasks WHERE id=? AND enabled=1').get(req.params.id);if(!t)throw new Error('Task পাওয়া যায়নি');const attempt=q(`SELECT * FROM task_attempts WHERE user_id=? AND task_id=? AND status='started' ORDER BY id DESC LIMIT 1`).get(u.id,t.id);if(!attempt)throw new Error('Active Task session পাওয়া যায়নি।');if(Date.now()-Date.parse(attempt.started_at)<10000)throw new Error('10 সেকেন্ড পূর্ণ হয়নি।');if(Date.now()-Date.parse(attempt.last_heartbeat)>8000)throw new Error('Task session বন্ধ হয়ে গেছে। আবার Start Task করুন।');const last=latestCompletion(u,t);if(last&&Date.now()-Date.parse(last.completed_at)<5*3600e3)throw new Error('এই Task আবার করার জন্য 5 ঘণ্টা অপেক্ষা করুন।');q(`UPDATE task_attempts SET status='completed' WHERE id=?`).run(attempt.id);q('INSERT INTO task_completions(user_id,task_id,reward,completed_at) VALUES(?,?,?,?)').run(u.id,t.id,t.reward,now());q('UPDATE users SET balance=balance+? WHERE id=?').run(t.reward,u.id);q('INSERT INTO history(user_id,title,amount,status,created_at) VALUES(?,?,?,?,?)').run(u.id,t.title,t.reward,'Completed',now());return t.reward;});try{const reward=tx();res.json({ok:true,reward});}catch(e){res.status(400).json({message:e.message});}});
-app.get('/api/history',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});res.json({history:q('SELECT title,amount,status,created_at FROM history WHERE user_id=? ORDER BY id DESC LIMIT 100').all(u.id)});});
-app.get('/api/notices',(req,res)=>{if(!userFromReq(req))return res.status(401).json({message:'Session expired'});res.json({notices:q('SELECT id,title,message,created_at FROM notices WHERE enabled=1 ORDER BY id DESC').all()});});
+app.post('/api/register',(req,res)=>{
+  const name=String(req.body.name||'').trim();
+  const password=String(req.body.password||'');
+
+  if(name.length<2 || password.length<6){
+    return res.status(400).json({
+      message:'নাম এবং কমপক্ষে 6 অক্ষরের password দিন।'
+    });
+  }
+
+  const exists=q(
+    'SELECT id FROM users WHERE lower(name)=lower(?)'
+  ).get(name);
+
+  if(exists){
+    return res.status(409).json({
+      message:'এই নাম দিয়ে account আগে থেকেই আছে।'
+    });
+  }
+
+  const info=q(
+    'INSERT INTO users(name,password_hash,created_at) VALUES(?,?,?)'
+  ).run(
+    name,
+    bcrypt.hashSync(password,12),
+    now()
+  );
+
+  const s=token();
+  const exp=new Date(Date.now()+30*864e5).toISOString();
+
+  q(
+    'INSERT INTO user_sessions(session,user_id,created_at,expires_at) VALUES(?,?,?,?)'
+  ).run(
+    s,
+    info.lastInsertRowid,
+    now(),
+    exp
+  );
+
+  const u=q(
+    'SELECT id,name,balance,blocked,created_at FROM users WHERE id=?'
+  ).get(info.lastInsertRowid);
+
+  res.json({
+    session:s,
+    user:u
+  });
+});
+
+app.post('/api/login',(req,res)=>{
+  const name=String(req.body.name||'').trim();
+  const password=String(req.body.password||'');
+
+  const u=q(
+    'SELECT * FROM users WHERE lower(name)=lower(?)'
+  ).get(name);
+
+  if(!u || !bcrypt.compareSync(password,u.password_hash)){
+    return res.status(401).json({
+      message:'Name অথবা password ভুল।'
+    });
+  }
+
+  if(u.blocked){
+    return res.status(403).json({
+      message:'আপনার account blocked।'
+    });
+  }
+
+  const s=token();
+  const exp=new Date(Date.now()+30*864e5).toISOString();
+
+  q(
+    'INSERT INTO user_sessions(session,user_id,created_at,expires_at) VALUES(?,?,?,?)'
+  ).run(
+    s,
+    u.id,
+    now(),
+    exp
+  );
+
+  res.json({
+    session:s,
+    user:{
+      id:u.id,
+      name:u.name,
+      balance:u.balance,
+      blocked:u.blocked,
+      created_at:u.created_at
+    }
+  });
+});
+
+app.post('/api/logout',(req,res)=>{
+  const s=req.header('x-user-session');
+
+  if(s){
+    q('DELETE FROM user_sessions WHERE session=?').run(s);
+  }
+
+  res.json({ok:true});
+});
+
+app.get('/api/me',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  res.json({
+    user:{
+      id:u.id,
+      name:u.name,
+      balance:u.balance,
+      blocked:u.blocked,
+      created_at:u.created_at
+    }
+  });
+});
+
+app.get('/api/dashboard',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  const start=new Date();
+  start.setHours(0,0,0,0);
+
+  const today=start.toISOString();
+
+  const todayEarnings=q(
+    'SELECT COALESCE(SUM(amount),0) s FROM history WHERE user_id=? AND status="Completed" AND created_at>=?'
+  ).get(u.id,today).s;
+
+  const totalE=q(
+    'SELECT COALESCE(SUM(amount),0) s FROM history WHERE user_id=? AND status="Completed" AND amount>0'
+  ).get(u.id).s;
+
+  const completed=q(
+    'SELECT COUNT(*) c FROM task_completions WHERE user_id=?'
+  ).get(u.id).c;
+
+  res.json({
+    balance:u.balance,
+    todayEarnings:todayEarnings,
+    totalEarnings:totalE,
+    completedCount:completed
+  });
+});
+
+app.get('/api/tasks',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  const rows=q(`
+    SELECT
+      t.*,
+      MAX(c.completed_at) last_completed
+    FROM tasks t
+    LEFT JOIN task_completions c
+      ON c.task_id=t.id
+      AND c.user_id=?
+    WHERE t.enabled=1
+    GROUP BY t.id
+    ORDER BY t.id
+  `).all(u.id);
+
+  const tasks=rows.map(r=>{
+    let available_at=null;
+
+    if(r.last_completed){
+      available_at=new Date(
+        new Date(r.last_completed).getTime()+5*3600e3
+      ).toISOString();
+    }
+
+    return {
+      ...r,
+      available_at:
+        available_at && new Date(available_at)>new Date()
+          ? available_at
+          : null
+    };
+  });
+
+  res.json({tasks});
+});
+
+function latestCompletion(u,t){
+  return q(
+    'SELECT completed_at FROM task_completions WHERE user_id=? AND task_id=? ORDER BY id DESC LIMIT 1'
+  ).get(u.id,t.id);
+}
+
+app.post('/api/tasks/:id/start',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  const t=q(
+    'SELECT * FROM tasks WHERE id=? AND enabled=1'
+  ).get(req.params.id);
+
+  if(!t){
+    return res.status(404).json({
+      message:'Task পাওয়া যায়নি'
+    });
+  }
+
+  const last=latestCompletion(u,t);
+
+  if(
+    last &&
+    Date.now()-Date.parse(last.completed_at)<5*3600e3
+  ){
+    return res.status(409).json({
+      message:'এই Task আবার করার জন্য 5 ঘণ্টা অপেক্ষা করুন।'
+    });
+  }
+
+  q(`
+    UPDATE task_attempts
+    SET status='cancelled'
+    WHERE user_id=?
+      AND task_id=?
+      AND status='started'
+  `).run(u.id,t.id);
+
+  q(`
+    INSERT INTO task_attempts(
+      user_id,
+      task_id,
+      started_at,
+      last_heartbeat,
+      status
+    )
+    VALUES(?,?,?,?,?)
+  `).run(
+    u.id,
+    t.id,
+    now(),
+    now(),
+    'started'
+  );
+
+  res.json({
+    ok:true,
+    taskId:t.id
+  });
+});
+
+app.post('/api/tasks/:id/heartbeat',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  q(`
+    UPDATE task_attempts
+    SET last_heartbeat=?
+    WHERE id=(
+      SELECT id
+      FROM task_attempts
+      WHERE user_id=?
+        AND task_id=?
+        AND status='started'
+      ORDER BY id DESC
+      LIMIT 1
+    )
+  `).run(
+    now(),
+    u.id,
+    req.params.id
+  );
+
+  res.json({ok:true});
+});
+
+app.post('/api/tasks/:id/cancel',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  q(`
+    UPDATE task_attempts
+    SET status='cancelled'
+    WHERE user_id=?
+      AND task_id=?
+      AND status='started'
+  `).run(
+    u.id,
+    req.params.id
+  );
+
+  res.json({ok:true});
+});
+
+app.post('/api/tasks/:id/complete',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  const tx=db.transaction(()=>{
+    const t=q(
+      'SELECT * FROM tasks WHERE id=? AND enabled=1'
+    ).get(req.params.id);
+
+    if(!t){
+      throw new Error('Task পাওয়া যায়নি');
+    }
+
+    const attempt=q(`
+      SELECT *
+      FROM task_attempts
+      WHERE user_id=?
+        AND task_id=?
+        AND status='started'
+      ORDER BY id DESC
+      LIMIT 1
+    `).get(u.id,t.id);
+
+    if(!attempt){
+      throw new Error('Active Task session পাওয়া যায়নি।');
+    }
+
+    if(
+      Date.now()-Date.parse(attempt.started_at)<10000
+    ){
+      throw new Error('10 সেকেন্ড পূর্ণ হয়নি।');
+    }
+
+    if(
+      Date.now()-Date.parse(attempt.last_heartbeat)>8000
+    ){
+      throw new Error(
+        'Task session বন্ধ হয়ে গেছে। আবার Start Task করুন।'
+      );
+    }
+
+    const last=latestCompletion(u,t);
+
+    if(
+      last &&
+      Date.now()-Date.parse(last.completed_at)<5*3600e3
+    ){
+      throw new Error(
+        'এই Task আবার করার জন্য 5 ঘণ্টা অপেক্ষা করুন।'
+      );
+    }
+
+    q(
+      "UPDATE task_attempts SET status='completed' WHERE id=?"
+    ).run(attempt.id);
+
+    q(`
+      INSERT INTO task_completions(
+        user_id,
+        task_id,
+        reward,
+        completed_at
+      )
+      VALUES(?,?,?,?)
+    `).run(
+      u.id,
+      t.id,
+      t.reward,
+      now()
+    );
+
+    q(
+      'UPDATE users SET balance=balance+? WHERE id=?'
+    ).run(
+      t.reward,
+      u.id
+    );
+
+    q(`
+      INSERT INTO history(
+        user_id,
+        title,
+        amount,
+        status,
+        created_at
+      )
+      VALUES(?,?,?,?,?)
+    `).run(
+      u.id,
+      t.title,
+      t.reward,
+      'Completed',
+      now()
+    );
+
+    return t.reward;
+  });
+
+  try{
+    const reward=tx();
+
+    res.json({
+      ok:true,
+      reward:reward
+    });
+  }catch(e){
+    res.status(400).json({
+      message:e.message
+    });
+  }
+});
+
+app.get('/api/history',(req,res)=>{
+  const u=userFromReq(req);
+
+  if(!u){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  res.json({
+    history:q(`
+      SELECT
+        title,
+        amount,
+        status,
+        created_at
+      FROM history
+      WHERE user_id=?
+      ORDER BY id DESC
+      LIMIT 100
+    `).all(u.id)
+  });
+});
+
+app.get('/api/notices',(req,res)=>{
+  if(!userFromReq(req)){
+    return res.status(401).json({
+      message:'Session expired'
+    });
+  }
+
+  res.json({
+    notices:q(`
+      SELECT
+        id,
+        title,
+        message,
+        created_at
+      FROM notices
+      WHERE enabled=1
+      ORDER BY id DESC
+    `).all()
+  });
+});
 app.get('/api/fee-status',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});const first=q('SELECT id FROM withdrawals WHERE user_id=? LIMIT 1').get(u.id);if(first)return res.json({required:false,status:'not_required'});const f=q('SELECT status FROM fee_payments WHERE user_id=? ORDER BY id DESC LIMIT 1').get(u.id);res.json({required:!f||f.status!=='approved',status:f?.status||'required'});});
 app.post('/api/fee-payments',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});const tx=String(req.body.transactionId||'').trim();if(tx.length<4)return res.status(400).json({message:'Transaction ID দিন।'});q('INSERT INTO fee_payments(user_id,transaction_id,status,created_at) VALUES(?,?,?,?)').run(u.id,tx,'pending',now());res.json({ok:true,status:'pending'});});
 app.post('/api/withdrawals',(req,res)=>{const u=userFromReq(req);if(!u)return res.status(401).json({message:'Session expired'});const method=String(req.body.method||''),num=String(req.body.accountNumber||'').trim(),amount=Number(req.body.amount);if(!['bKash','Nagad','Rocket'].includes(method))return res.status(400).json({message:'Payment method ভুল।'});if(!/^01\d{9}$/.test(num))return res.status(400).json({message:'সঠিক ১১ সংখ্যার account number দিন।'});if(!Number.isInteger(amount)||amount<200)return res.status(400).json({message:'Minimum withdrawal ৳200।'});if(amount>u.balance)return res.status(400).json({message:'Balance কম।'});const first=!q('SELECT id FROM withdrawals WHERE user_id=? LIMIT 1').get(u.id);if(first){const fee=q('SELECT status FROM fee_payments WHERE user_id=? ORDER BY id DESC LIMIT 1').get(u.id);if(!fee||fee.status!=='approved')return res.status(403).json({message:'প্রথম withdrawal-এর Processing Fee আগে Admin দ্বারা approve হতে হবে।'});}const tx=db.transaction(()=>{q('UPDATE users SET balance=balance-? WHERE id=?').run(amount,u.id);const id=q('INSERT INTO withdrawals(user_id,method,account_number,amount,status,created_at) VALUES(?,?,?,?,?,?)').run(u.id,method,num,amount,'processing',now()).lastInsertRowid;q('INSERT INTO history(user_id,title,amount,status,created_at) VALUES(?,?,?,?,?)').run(u.id,`Withdrawal (${method})`,-amount,'Processing',now());return id;});res.json({ok:true,id:tx});});
