@@ -3,23 +3,24 @@
 
   /* =========================================================
      MASUD JR OFFICIAL
-     Frontend API connection
+     COMPLETE FRONTEND SCRIPT
      ========================================================= */
 
-  const RENDER_API = "https://masud-jr-official-online.onrender.com";
+  const RENDER_API =
+    "https://masud-jr-official-online.onrender.com";
 
-  // Render-এর নিজের domain হলে same-origin API ব্যবহার করবে।
-  // Netlify/অন্য hosting হলে Render API ব্যবহার করবে।
-  const API_BASE = location.hostname.endsWith(".onrender.com")
-    ? ""
-    : RENDER_API;
+  const API_BASE =
+    location.hostname.endsWith(".onrender.com")
+      ? ""
+      : RENDER_API;
 
   const USER_SESSION_KEY = "mjrUserSessionV2";
   const USER_KEY = "mjrUserV2";
 
-  let session = localStorage.getItem(USER_SESSION_KEY) || "";
-  let me = null;
+  let session =
+    localStorage.getItem(USER_SESSION_KEY) || "";
 
+  let me = null;
   let tasks = [];
   let notices = [];
 
@@ -28,15 +29,25 @@
 
   let taskTimer = null;
   let heartbeatTimer = null;
-
   let taskStartedAt = 0;
+
   const TASK_DURATION = 10;
 
   /* =========================================================
-     HELPERS
+     BASIC HELPERS
      ========================================================= */
 
-  const $ = (id) => document.getElementById(id);
+  const $ = (id) =>
+    document.getElementById(id);
+
+  function setText(id, value) {
+    const el = $(id);
+
+    if (el) {
+      el.textContent =
+        value ?? "";
+    }
+  }
 
   function esc(value) {
     return String(value ?? "")
@@ -83,10 +94,15 @@
     });
   }
 
-  function showMessage(element, message, type = "") {
+  function showMessage(
+    element,
+    message,
+    type = ""
+  ) {
     if (!element) return;
 
-    element.textContent = message || "";
+    element.textContent =
+      message || "";
 
     element.classList.remove(
       "success",
@@ -99,18 +115,17 @@
     }
   }
 
+  /* =========================================================
+     AUTH STORAGE
+     ========================================================= */
+
   function saveUser() {
     if (me) {
-      localStorage.setItem(USER_KEY, JSON.stringify(me));
+      localStorage.setItem(
+        USER_KEY,
+        JSON.stringify(me)
+      );
     }
-  }
-
-  function clearAuth() {
-    session = "";
-    me = null;
-
-    localStorage.removeItem(USER_SESSION_KEY);
-    localStorage.removeItem(USER_KEY);
   }
 
   function saveAuth(data) {
@@ -118,7 +133,11 @@
 
     if (data.session) {
       session = data.session;
-      localStorage.setItem(USER_SESSION_KEY, session);
+
+      localStorage.setItem(
+        USER_SESSION_KEY,
+        session
+      );
     }
 
     if (data.user) {
@@ -129,49 +148,74 @@
 
   function getSavedUser() {
     try {
-      const raw = localStorage.getItem(USER_KEY);
-      return raw ? JSON.parse(raw) : null;
+      const raw =
+        localStorage.getItem(USER_KEY);
+
+      return raw
+        ? JSON.parse(raw)
+        : null;
     } catch {
       return null;
     }
+  }
+
+  function clearAuth() {
+    session = "";
+    me = null;
+
+    localStorage.removeItem(
+      USER_SESSION_KEY
+    );
+
+    localStorage.removeItem(
+      USER_KEY
+    );
   }
 
   /* =========================================================
      API
      ========================================================= */
 
-  async function api(path, options = {}) {
+  async function api(
+    path,
+    options = {}
+  ) {
     const headers = {
-      "Content-Type": "application/json",
+      "Content-Type":
+        "application/json",
       ...(options.headers || {})
     };
 
     if (session) {
-      headers["x-user-session"] = session;
+      headers["x-user-session"] =
+        session;
     }
 
-    const config = {
-      ...options,
-      headers
-    };
-
-    const response = await fetch(
-      `${API_BASE}${path}`,
-      config
-    );
-
-    const data = await response
-      .json()
-      .catch(() => ({}));
-
-    if (!response.ok) {
-      const error = new Error(
-        data.message ||
-        data.error ||
-        `Server error (${response.status})`
+    const response =
+      await fetch(
+        `${API_BASE}${path}`,
+        {
+          ...options,
+          headers
+        }
       );
 
-      error.status = response.status;
+    const data =
+      await response
+        .json()
+        .catch(() => ({}));
+
+    if (!response.ok) {
+      const error =
+        new Error(
+          data.message ||
+          data.error ||
+          `Server error (${response.status})`
+        );
+
+      error.status =
+        response.status;
+
       error.data = data;
 
       throw error;
@@ -181,106 +225,218 @@
   }
 
   /* =========================================================
-     PAGE / SECTION CONTROL
+     AUTH PAGE
      ========================================================= */
 
   function showAuthPage() {
-    if ($("authPage")) {
-      $("authPage").style.display = "";
+    const auth =
+      $("authPage");
+
+    const dashboard =
+      $("dashboard");
+
+    if (auth) {
+      auth.style.display = "";
     }
 
-    if ($("dashboard")) {
-      $("dashboard").style.display = "none";
+    if (dashboard) {
+      dashboard.style.display =
+        "none";
     }
+
+    activateLoginTab();
   }
 
   function showDashboard() {
-    if ($("authPage")) {
-      $("authPage").style.display = "none";
+    const auth =
+      $("authPage");
+
+    const dashboard =
+      $("dashboard");
+
+    if (auth) {
+      auth.style.display =
+        "none";
     }
 
-    if ($("dashboard")) {
-      $("dashboard").style.display = "";
-    }
-  }
-
-  function openSection(name) {
-    const sections = document.querySelectorAll(
-      "[data-section]"
-    );
-
-    sections.forEach((section) => {
-      section.classList.toggle(
-        "active",
-        section.dataset.section === name
-      );
-    });
-
-    document
-      .querySelectorAll("[data-nav]")
-      .forEach((button) => {
-        button.classList.toggle(
-          "active",
-          button.dataset.nav === name
-        );
-      });
-
-    // Existing IDs থাকলে সেগুলোও handle করবে
-    const ids = [
-      "homeSection",
-      "tasksSection",
-      "historySection",
-      "profileSection"
-    ];
-
-    ids.forEach((id) => {
-      const el = $(id);
-      if (!el) return;
-
-      const sectionName = id
-        .replace("Section", "")
-        .toLowerCase();
-
-      el.style.display =
-        sectionName === name.toLowerCase()
-          ? ""
-          : "none";
-    });
-
-    if (name === "home") {
-      refreshDashboard().catch(console.error);
-    }
-
-    if (name === "tasks") {
-      loadTasks().catch(console.error);
-    }
-
-    if (name === "history") {
-      loadHistory().catch(console.error);
-    }
-
-    if (name === "profile") {
-      renderProfile();
+    if (dashboard) {
+      dashboard.style.display =
+        "";
     }
   }
 
   /* =========================================================
-     AUTH
+     LOGIN / REGISTRATION TABS
+     ========================================================= */
+
+  function getAuthTabElements() {
+    const elements =
+      Array.from(
+        document.querySelectorAll(
+          "button, a, [role='tab'], .tab, .tab-btn, .auth-tab"
+        )
+      );
+
+    return elements.filter(
+      (el) => {
+        const text =
+          el.textContent
+            .trim()
+            .toLowerCase();
+
+        return (
+          text === "login" ||
+          text === "registration" ||
+          text.includes("registration")
+        );
+      }
+    );
+  }
+
+  function setAuthTabActive(
+    activeText
+  ) {
+    getAuthTabElements()
+      .forEach((el) => {
+        const text =
+          el.textContent
+            .trim()
+            .toLowerCase();
+
+        const isActive =
+          activeText ===
+          "registration"
+            ? text.includes(
+                "registration"
+              )
+            : text.includes("login") &&
+              !text.includes(
+                "registration"
+              );
+
+        el.classList.toggle(
+          "active",
+          isActive
+        );
+
+        el.setAttribute(
+          "aria-selected",
+          isActive
+            ? "true"
+            : "false"
+        );
+      });
+  }
+
+  function activateLoginTab() {
+    const loginForm =
+      $("loginForm");
+
+    const registerForm =
+      $("registerForm");
+
+    if (loginForm) {
+      loginForm.style.display =
+        "";
+    }
+
+    if (registerForm) {
+      registerForm.style.display =
+        "none";
+    }
+
+    setAuthTabActive(
+      "login"
+    );
+  }
+
+  function activateRegistrationTab() {
+    const loginForm =
+      $("loginForm");
+
+    const registerForm =
+      $("registerForm");
+
+    if (loginForm) {
+      loginForm.style.display =
+        "none";
+    }
+
+    if (registerForm) {
+      registerForm.style.display =
+        "";
+    }
+
+    setAuthTabActive(
+      "registration"
+    );
+  }
+
+  function bindAuthTabs() {
+    const elements =
+      getAuthTabElements();
+
+    elements.forEach((el) => {
+      // একই element-এ বারবার listener না বসানোর জন্য
+      if (
+        el.dataset.authTabBound ===
+        "1"
+      ) {
+        return;
+      }
+
+      el.dataset.authTabBound =
+        "1";
+
+      el.addEventListener(
+        "click",
+        (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const text =
+            el.textContent
+              .trim()
+              .toLowerCase();
+
+          if (
+            text.includes(
+              "registration"
+            )
+          ) {
+            activateRegistrationTab();
+          } else {
+            activateLoginTab();
+          }
+        }
+      );
+    });
+  }
+
+  /* =========================================================
+     REGISTER
      ========================================================= */
 
   async function register(event) {
-    event?.preventDefault();
+    if (event) {
+      event.preventDefault();
+    }
 
     const name =
-      $("registerName")?.value.trim() || "";
+      $("registerName")
+        ?.value
+        .trim() || "";
 
     const password =
-      $("registerPassword")?.value || "";
+      $("registerPassword")
+        ?.value || "";
 
     const confirm =
-      $("registerConfirm")?.value || "";
+      $("registerConfirm")
+        ?.value || "";
 
-    const message = $("registerMessage");
+    const message =
+      $("registerMessage");
 
     if (!name) {
       showMessage(
@@ -316,45 +472,63 @@
         "warning"
       );
 
-      const data = await api("/api/register", {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          password
-        })
-      });
+      const data =
+        await api(
+          "/api/register",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              name,
+              password
+            })
+          }
+        );
 
       saveAuth(data);
 
       showMessage(
         message,
-        "Registration সফল হয়েছে।",
+        "Registration সফল হয়েছে!",
         "success"
       );
 
       await openDashboard();
 
     } catch (error) {
-      console.error("Register error:", error);
+      console.error(
+        "Registration error:",
+        error
+      );
 
       showMessage(
         message,
-        error.message || "Registration failed.",
+        error.message ||
+          "Registration failed.",
         "error"
       );
     }
   }
 
+  /* =========================================================
+     LOGIN
+     ========================================================= */
+
   async function login(event) {
-    event?.preventDefault();
+    if (event) {
+      event.preventDefault();
+    }
 
     const name =
-      $("loginName")?.value.trim() || "";
+      $("loginName")
+        ?.value
+        .trim() || "";
 
     const password =
-      $("loginPassword")?.value || "";
+      $("loginPassword")
+        ?.value || "";
 
-    const message = $("loginMessage");
+    const message =
+      $("loginMessage");
 
     if (!name || !password) {
       showMessage(
@@ -372,48 +546,68 @@
         "warning"
       );
 
-      const data = await api("/api/login", {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          password
-        })
-      });
+      const data =
+        await api(
+          "/api/login",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              name,
+              password
+            })
+          }
+        );
 
       saveAuth(data);
 
       showMessage(
         message,
-        "Login সফল হয়েছে।",
+        "Login সফল হয়েছে!",
         "success"
       );
 
       await openDashboard();
 
     } catch (error) {
-      console.error("Login error:", error);
+      console.error(
+        "Login error:",
+        error
+      );
 
       showMessage(
         message,
-        error.message || "Login failed.",
+        error.message ||
+          "Login failed.",
         "error"
       );
     }
   }
 
+  /* =========================================================
+     LOGOUT
+     ========================================================= */
+
   async function logout() {
     try {
       if (session) {
-        await api("/api/logout", {
-          method: "POST"
-        });
+        await api(
+          "/api/logout",
+          {
+            method: "POST"
+          }
+        );
       }
     } catch (error) {
-      console.warn("Logout API error:", error);
+      console.warn(
+        "Logout error:",
+        error
+      );
     }
 
     stopTaskTimers();
+
     clearAuth();
+
     showAuthPage();
   }
 
@@ -422,23 +616,30 @@
      ========================================================= */
 
   async function loadMe() {
-    if (!session) return null;
+    if (!session) {
+      return null;
+    }
 
     try {
-      const data = await api("/api/me");
+      const data =
+        await api(
+          "/api/me"
+        );
 
       me =
         data.user ||
         data.me ||
-        data ||
-        me;
+        data;
 
       saveUser();
 
       return me;
 
     } catch (error) {
-      console.warn("ME error:", error);
+      console.warn(
+        "ME error:",
+        error
+      );
 
       if (
         error.status === 401 ||
@@ -453,122 +654,7 @@
   }
 
   /* =========================================================
-     DASHBOARD
-     ========================================================= */
-
-  async function refreshDashboard() {
-    if (!session) return;
-
-    try {
-      const data = await api("/api/dashboard");
-
-      if (data.user) {
-        me = {
-          ...me,
-          ...data.user
-        };
-      }
-
-      if (data.me) {
-        me = {
-          ...me,
-          ...data.me
-        };
-      }
-
-      if (data.balance !== undefined) {
-        me = {
-          ...me,
-          balance: data.balance
-        };
-      }
-
-      if (data.todayEarnings !== undefined) {
-        me = {
-          ...me,
-          todayEarnings: data.todayEarnings
-        };
-      }
-
-      if (data.totalEarnings !== undefined) {
-        me = {
-          ...me,
-          totalEarnings: data.totalEarnings
-        };
-      }
-
-      if (data.completedCount !== undefined) {
-        me = {
-          ...me,
-          completedCount: data.completedCount
-        };
-      }
-
-      saveUser();
-
-      renderUser();
-      renderDashboardStats(data);
-
-    } catch (error) {
-      console.error(
-        "Dashboard error:",
-        error
-      );
-
-      if (
-        error.status === 401 ||
-        error.status === 403
-      ) {
-        clearAuth();
-        showAuthPage();
-      }
-    }
-  }
-
-  function renderDashboardStats(data = {}) {
-    const balance =
-      data.balance ??
-      me?.balance ??
-      0;
-
-    const today =
-      data.todayEarnings ??
-      me?.todayEarnings ??
-      0;
-
-    const total =
-      data.totalEarnings ??
-      me?.totalEarnings ??
-      0;
-
-    const completed =
-      data.completedCount ??
-      me?.completedCount ??
-      0;
-
-    setText("homeBalance", money(balance));
-    setText("balanceToday", money(today));
-    setText("todayIncome", money(today));
-
-    setText("balanceTotal", money(total));
-    setText("totalIncome", money(total));
-
-    setText(
-      "completedCount",
-      String(completed)
-    );
-  }
-
-  function setText(id, value) {
-    const el = $(id);
-
-    if (el) {
-      el.textContent = value;
-    }
-  }
-
-  /* =========================================================
-     USER / PROFILE UI
+     USER UI
      ========================================================= */
 
   function renderUser() {
@@ -617,65 +703,207 @@
       "profileAvatar"
     ];
 
-    avatarIds.forEach((id) => {
-      const avatar = $(id);
+    avatarIds.forEach(
+      (id) => {
+        const avatar = $(id);
 
-      if (!avatar) return;
+        if (!avatar) return;
 
-      // যদি HTML-এ img থাকে, তার ছবি নষ্ট করবে না।
-      if (
-        avatar.tagName === "IMG"
-      ) {
-        if (!avatar.getAttribute("src")) {
-          avatar.src = "profile.jpg";
+        if (
+          avatar.tagName ===
+          "IMG"
+        ) {
+          if (
+            !avatar.getAttribute(
+              "src"
+            )
+          ) {
+            avatar.src =
+              "profile.jpg";
+          }
+
+          avatar.alt = name;
+        } else {
+          avatar.textContent =
+            name
+              .charAt(0)
+              .toUpperCase();
         }
-
-        avatar.alt = name;
-        return;
       }
-
-      // পুরনো MJ text avatar হলে নামের প্রথম অক্ষর
-      // দেখাবে।
-      avatar.textContent =
-        name
-          .trim()
-          .charAt(0)
-          .toUpperCase() || "M";
-    });
-  }
-
-  function renderProfile() {
-    renderUser();
-
-    const balance =
-      me?.balance || 0;
-
-    const today =
-      me?.todayEarnings || 0;
-
-    const total =
-      me?.totalEarnings || 0;
-
-    const completed =
-      me?.completedCount || 0;
+    );
 
     setText(
       "profileBalance",
-      money(balance)
+      money(me.balance)
     );
 
     setText(
       "profileToday",
-      money(today)
+      money(
+        me.todayEarnings
+      )
     );
 
     setText(
       "profileTotal",
-      money(total)
+      money(
+        me.totalEarnings
+      )
     );
 
     setText(
       "profileCompleted",
+      String(
+        me.completedCount || 0
+      )
+    );
+  }
+
+  /* =========================================================
+     DASHBOARD
+     ========================================================= */
+
+  async function refreshDashboard() {
+    if (!session) return;
+
+    try {
+      const data =
+        await api(
+          "/api/dashboard"
+        );
+
+      if (data.user) {
+        me = {
+          ...me,
+          ...data.user
+        };
+      }
+
+      if (data.me) {
+        me = {
+          ...me,
+          ...data.me
+        };
+      }
+
+      if (
+        data.balance !==
+        undefined
+      ) {
+        me = {
+          ...me,
+          balance:
+            data.balance
+        };
+      }
+
+      if (
+        data.todayEarnings !==
+        undefined
+      ) {
+        me = {
+          ...me,
+          todayEarnings:
+            data.todayEarnings
+        };
+      }
+
+      if (
+        data.totalEarnings !==
+        undefined
+      ) {
+        me = {
+          ...me,
+          totalEarnings:
+            data.totalEarnings
+        };
+      }
+
+      if (
+        data.completedCount !==
+        undefined
+      ) {
+        me = {
+          ...me,
+          completedCount:
+            data.completedCount
+        };
+      }
+
+      saveUser();
+
+      renderUser();
+
+      renderDashboardStats(
+        data
+      );
+
+    } catch (error) {
+      console.error(
+        "Dashboard error:",
+        error
+      );
+
+      if (
+        error.status === 401 ||
+        error.status === 403
+      ) {
+        clearAuth();
+        showAuthPage();
+      }
+    }
+  }
+
+  function renderDashboardStats(
+    data = {}
+  ) {
+    const balance =
+      data.balance ??
+      me?.balance ??
+      0;
+
+    const today =
+      data.todayEarnings ??
+      me?.todayEarnings ??
+      0;
+
+    const total =
+      data.totalEarnings ??
+      me?.totalEarnings ??
+      0;
+
+    const completed =
+      data.completedCount ??
+      me?.completedCount ??
+      0;
+
+    setText(
+      "homeBalance",
+      money(balance)
+    );
+
+    setText(
+      "todayIncome",
+      money(today)
+    );
+
+    setText(
+      "balanceToday",
+      money(today)
+    );
+
+    setText(
+      "totalIncome",
+      money(total)
+    );
+
+    setText(
+      "balanceTotal",
+      money(total)
+    );
+
+    setText(
+      "completedCount",
       String(completed)
     );
   }
@@ -688,7 +916,10 @@
     if (!session) return;
 
     try {
-      const data = await api("/api/tasks");
+      const data =
+        await api(
+          "/api/tasks"
+        );
 
       tasks =
         Array.isArray(data)
@@ -703,15 +934,25 @@
         error
       );
 
-      renderTaskError(
-        error.message ||
-        "Task load করা যায়নি।"
-      );
+      const list =
+        $("taskList");
+
+      if (list) {
+        list.innerHTML = `
+          <div class="empty-state error">
+            ${esc(
+              error.message ||
+              "Task load করা যায়নি।"
+            )}
+          </div>
+        `;
+      }
     }
   }
 
   function renderTasks() {
-    const list = $("taskList");
+    const list =
+      $("taskList");
 
     if (!list) return;
 
@@ -721,127 +962,123 @@
           এখন কোনো task available নেই।
         </div>
       `;
+
       return;
     }
 
-    list.innerHTML = tasks
-      .map((task) => {
-        const id = task.id;
+    list.innerHTML =
+      tasks
+        .map((task) => {
+          const id =
+            task.id;
 
-        const title =
-          task.title ||
-          task.name ||
-          "Task";
+          const title =
+            task.title ||
+            task.name ||
+            "Task";
 
-        const reward =
-          task.reward ??
-          task.amount ??
-          0;
+          const reward =
+            task.reward ??
+            task.amount ??
+            0;
 
-        const description =
-          task.description ||
-          task.details ||
-          "";
+          const description =
+            task.description ||
+            task.details ||
+            "";
 
-        const availableAt =
-          task.available_at ||
-          task.availableAt;
+          return `
+            <div
+              class="task-card"
+              data-task-id="${esc(id)}"
+            >
+              <div class="task-card-content">
 
-        return `
-          <div
-            class="task-card"
-            data-task-id="${esc(id)}"
-          >
-            <div class="task-card-content">
-              <h3>${esc(title)}</h3>
-
-              ${
-                description
-                  ? `<p>${esc(description)}</p>`
-                  : ""
-              }
-
-              <div class="task-meta">
-                <span>
-                  Reward: ${money(reward)}
-                </span>
+                <h3>
+                  ${esc(title)}
+                </h3>
 
                 ${
-                  availableAt
-                    ? `<span>
-                        Available:
-                        ${dateText(availableAt)}
-                      </span>`
+                  description
+                    ? `
+                      <p>
+                        ${esc(
+                          description
+                        )}
+                      </p>
+                    `
                     : ""
                 }
-              </div>
-            </div>
 
-            <button
-              type="button"
-              class="task-start-btn"
-              data-start-task="${esc(id)}"
-            >
-              Start Task
-            </button>
-          </div>
-        `;
-      })
-      .join("");
+                <div class="task-meta">
+                  <span>
+                    Reward:
+                    ${money(reward)}
+                  </span>
+                </div>
+
+              </div>
+
+              <button
+                type="button"
+                class="task-start-btn"
+                data-start-task="${esc(id)}"
+              >
+                Start Task
+              </button>
+
+            </div>
+          `;
+        })
+        .join("");
 
     list
       .querySelectorAll(
         "[data-start-task]"
       )
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            const id =
-              Number(
-                button.dataset.startTask
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            () => {
+              startTask(
+                Number(
+                  button.dataset
+                    .startTask
+                )
               );
-
-            startTask(id);
-          }
-        );
-      });
+            }
+          );
+        }
+      );
   }
-
-  function renderTaskError(message) {
-    const list = $("taskList");
-
-    if (!list) return;
-
-    list.innerHTML = `
-      <div class="empty-state error">
-        ${esc(message)}
-      </div>
-    `;
-  }
-
-  /* =========================================================
-     TASK MODAL
-     ========================================================= */
 
   function findTask(id) {
     return tasks.find(
       (task) =>
-        Number(task.id) === Number(id)
+        Number(task.id) ===
+        Number(id)
     );
   }
 
+  /* =========================================================
+     START TASK
+     ========================================================= */
+
   async function startTask(id) {
-    const task = findTask(id);
-
-    if (!task) {
-      alert("Task পাওয়া যায়নি।");
-      return;
-    }
-
     if (activeTaskId) {
       alert(
         "একটি task বর্তমানে চলছে।"
+      );
+      return;
+    }
+
+    const task =
+      findTask(id);
+
+    if (!task) {
+      alert(
+        "Task পাওয়া যায়নি।"
       );
       return;
     }
@@ -854,11 +1091,18 @@
         }
       );
 
-      activeTaskId = id;
-      activeTask = task;
-      taskStartedAt = Date.now();
+      activeTaskId =
+        id;
 
-      openTaskModal(task);
+      activeTask =
+        task;
+
+      taskStartedAt =
+        Date.now();
+
+      openTaskModal(
+        task
+      );
 
       startTaskTimers();
 
@@ -875,13 +1119,17 @@
     }
   }
 
-  function openTaskModal(task) {
-    const modal = $("taskModal");
+  /* =========================================================
+     TASK MODAL
+     ========================================================= */
 
-    if (!modal) {
-      // Modal HTML না থাকলেও task চালু থাকবে।
-      return;
-    }
+  function openTaskModal(
+    task
+  ) {
+    const modal =
+      $("taskModal");
+
+    if (!modal) return;
 
     setText(
       "modalTaskTitle",
@@ -900,13 +1148,21 @@
       task.details ||
       "Task complete করুন।";
 
-    const info = $("modalTaskInfo");
+    const info =
+      $("modalTaskInfo");
 
     if (info) {
       info.innerHTML = `
-        <p>${esc(description)}</p>
         <p>
-          <strong>Reward:</strong>
+          ${esc(
+            description
+          )}
+        </p>
+
+        <p>
+          <strong>
+            Reward:
+          </strong>
           ${money(reward)}
         </p>
       `;
@@ -919,43 +1175,57 @@
 
     setText(
       "countdown",
-      String(TASK_DURATION)
+      String(
+        TASK_DURATION
+      )
     );
 
-    const progress = $("progressBar");
+    const progress =
+      $("progressBar");
 
     if (progress) {
-      progress.style.width = "0%";
+      progress.style.width =
+        "0%";
     }
 
     const verify =
       $("verifyTaskBtn");
 
     if (verify) {
-      verify.disabled = true;
-      verify.style.display = "";
+      verify.disabled =
+        true;
+      verify.style.display =
+        "";
     }
 
     const cancel =
       $("cancelTaskBtn");
 
     if (cancel) {
-      cancel.disabled = false;
+      cancel.disabled =
+        false;
     }
 
-    modal.classList.add("active");
+    modal.style.display =
+      "";
 
-    modal.style.display = "";
+    modal.classList.add(
+      "active"
+    );
   }
 
   function closeTaskModal() {
-    const modal = $("taskModal");
+    const modal =
+      $("taskModal");
 
     if (!modal) return;
 
-    modal.classList.remove("active");
+    modal.classList.remove(
+      "active"
+    );
 
-    modal.style.display = "none";
+    modal.style.display =
+      "none";
   }
 
   /* =========================================================
@@ -963,152 +1233,138 @@
      ========================================================= */
 
   function startTaskTimers() {
-    stopTaskTimers(false);
+    stopTaskTimers(
+      false
+    );
 
-    let remaining = TASK_DURATION;
+    heartbeatTimer =
+      setInterval(
+        async () => {
+          if (
+            !activeTaskId
+          ) {
+            return;
+          }
 
-    updateCountdown(remaining);
-
-    // Backend heartbeat প্রতি 4 সেকেন্ডে
-    heartbeatTimer = setInterval(
-      async () => {
-        if (!activeTaskId) return;
-
-        try {
-          await api(
-            `/api/tasks/${activeTaskId}/heartbeat`,
-            {
-              method: "POST"
-            }
-          );
-        } catch (error) {
-          console.warn(
-            "Heartbeat failed:",
+          try {
+            await api(
+              `/api/tasks/${activeTaskId}/heartbeat`,
+              {
+                method:
+                  "POST"
+              }
+            );
+          } catch (
             error
+          ) {
+            console.warn(
+              "Heartbeat failed:",
+              error
+            );
+          }
+        },
+        4000
+      );
+
+    taskTimer =
+      setInterval(
+        async () => {
+          if (
+            !activeTaskId
+          ) {
+            return;
+          }
+
+          const elapsed =
+            Math.floor(
+              (
+                Date.now() -
+                taskStartedAt
+              ) / 1000
+            );
+
+          const remaining =
+            Math.max(
+              0,
+              TASK_DURATION -
+                elapsed
+            );
+
+          setText(
+            "countdown",
+            String(
+              remaining
+            )
           );
-        }
-      },
-      4000
-    );
 
-    taskTimer = setInterval(
-      async () => {
-        const elapsed =
-          Math.floor(
-            (Date.now() -
-              taskStartedAt) /
-              1000
-          );
+          const progress =
+            $("progressBar");
 
-        remaining =
-          Math.max(
-            0,
-            TASK_DURATION -
-              elapsed
-          );
+          if (progress) {
+            const percent =
+              Math.min(
+                100,
+                (
+                  elapsed /
+                  TASK_DURATION
+                ) * 100
+              );
 
-        updateCountdown(
-          remaining
-        );
+            progress.style.width =
+              `${percent}%`;
+          }
 
-        updateProgress(
-          elapsed
-        );
+          const status =
+            $("modalStatus");
 
-        if (
-          elapsed >=
-          TASK_DURATION
-        ) {
-          clearInterval(taskTimer);
-          taskTimer = null;
+          if (
+            status &&
+            remaining > 0
+          ) {
+            status.textContent =
+              `Please wait ${remaining}s...`;
+          }
 
-          await finishTask();
-        }
-      },
-      250
-    );
+          if (
+            elapsed >=
+            TASK_DURATION
+          ) {
+            clearInterval(
+              taskTimer
+            );
+
+            taskTimer =
+              null;
+
+            await finishTask();
+          }
+        },
+        250
+      );
   }
 
-  function updateCountdown(seconds) {
-    setText(
-      "countdown",
-      String(
-        Math.max(
-          0,
-          seconds
-        )
-      )
-    );
+  /* =========================================================
+     COMPLETE TASK
+     ========================================================= */
+
+  async function finishTask() {
+    if (!activeTaskId) {
+      return;
+    }
+
+    const id =
+      activeTaskId;
 
     const status =
       $("modalStatus");
-
-    if (
-      status &&
-      activeTaskId
-    ) {
-      if (seconds > 0) {
-        status.textContent =
-          `Please wait ${seconds}s...`;
-      } else {
-        status.textContent =
-          "Task complete হচ্ছে...";
-      }
-    }
-  }
-
-  function updateProgress(elapsed) {
-    const progress =
-      $("progressBar");
-
-    if (!progress) return;
-
-    const percent =
-      Math.min(
-        100,
-        (elapsed /
-          TASK_DURATION) *
-          100
-      );
-
-    progress.style.width =
-      `${percent}%`;
-  }
-
-  function stopTaskTimers(reset = true) {
-    if (taskTimer) {
-      clearInterval(taskTimer);
-      taskTimer = null;
-    }
-
-    if (heartbeatTimer) {
-      clearInterval(
-        heartbeatTimer
-      );
-      heartbeatTimer = null;
-    }
-
-    if (reset) {
-      activeTaskId = null;
-      activeTask = null;
-      taskStartedAt = 0;
-    }
-  }
-
-  async function finishTask() {
-    if (!activeTaskId) return;
-
-    const id = activeTaskId;
 
     const verify =
       $("verifyTaskBtn");
 
     if (verify) {
-      verify.disabled = true;
+      verify.disabled =
+        true;
     }
-
-    const status =
-      $("modalStatus");
 
     if (status) {
       status.textContent =
@@ -1119,7 +1375,8 @@
       await api(
         `/api/tasks/${id}/complete`,
         {
-          method: "POST"
+          method:
+            "POST"
         }
       );
 
@@ -1131,13 +1388,18 @@
       }
 
       if (verify) {
-        verify.style.display = "none";
+        verify.style.display =
+          "none";
       }
 
-      // Balance immediately update
+      /*
+       * সবচেয়ে গুরুত্বপূর্ণ:
+       * Task complete হওয়ার পর
+       * Dashboard + Balance আবার load হবে।
+       */
+
       await refreshAll();
 
-      // ছোট delay দিয়ে modal বন্ধ
       setTimeout(
         () => {
           closeTaskModal();
@@ -1160,41 +1422,83 @@
       }
 
       if (verify) {
-        verify.disabled = false;
+        verify.disabled =
+          false;
       }
     }
   }
 
-  async function cancelTask() {
-    if (!activeTaskId) {
-      closeTaskModal();
-      return;
-    }
+  /* =========================================================
+     CANCEL TASK
+     ========================================================= */
 
-    const id = activeTaskId;
+  async function cancelTask() {
+    const id =
+      activeTaskId;
 
     stopTaskTimers();
 
-    try {
-      await api(
-        `/api/tasks/${id}/cancel`,
-        {
-          method: "POST"
-        }
-      );
-    } catch (error) {
-      console.warn(
-        "Cancel task error:",
+    if (id) {
+      try {
+        await api(
+          `/api/tasks/${id}/cancel`,
+          {
+            method:
+              "POST"
+          }
+        );
+      } catch (
         error
-      );
+      ) {
+        console.warn(
+          "Cancel task error:",
+          error
+        );
+      }
     }
 
     closeTaskModal();
 
-    activeTaskId = null;
-    activeTask = null;
+    activeTaskId =
+      null;
+
+    activeTask =
+      null;
 
     await loadTasks();
+  }
+
+  function stopTaskTimers(
+    reset = true
+  ) {
+    if (taskTimer) {
+      clearInterval(
+        taskTimer
+      );
+
+      taskTimer =
+        null;
+    }
+
+    if (heartbeatTimer) {
+      clearInterval(
+        heartbeatTimer
+      );
+
+      heartbeatTimer =
+        null;
+    }
+
+    if (reset) {
+      activeTaskId =
+        null;
+
+      activeTask =
+        null;
+
+      taskStartedAt =
+        0;
+    }
   }
 
   /* =========================================================
@@ -1206,38 +1510,30 @@
 
     try {
       const data =
-        await api("/api/history");
+        await api(
+          "/api/history"
+        );
 
       const history =
         Array.isArray(data)
           ? data
           : data.history || [];
 
-      renderHistory(history);
+      renderHistory(
+        history
+      );
 
     } catch (error) {
       console.error(
         "History error:",
         error
       );
-
-      const list =
-        $("historyList");
-
-      if (list) {
-        list.innerHTML = `
-          <div class="empty-state error">
-            ${esc(
-              error.message ||
-              "History load করা যায়নি।"
-            )}
-          </div>
-        `;
-      }
     }
   }
 
-  function renderHistory(history) {
+  function renderHistory(
+    history
+  ) {
     const list =
       $("historyList");
 
@@ -1249,47 +1545,57 @@
           এখনো কোনো earning history নেই।
         </div>
       `;
+
       return;
     }
 
-    list.innerHTML = history
-      .map((item) => {
-        const amount =
-          item.amount ??
-          item.reward ??
-          item.earning ??
-          0;
+    list.innerHTML =
+      history
+        .map((item) => {
+          const amount =
+            item.amount ??
+            item.reward ??
+            item.earning ??
+            0;
 
-        const title =
-          item.title ||
-          item.task_title ||
-          item.taskName ||
-          "Task";
+          const title =
+            item.title ||
+            item.task_title ||
+            item.taskName ||
+            "Task";
 
-        const created =
-          item.created_at ||
-          item.createdAt;
+          const created =
+            item.created_at ||
+            item.createdAt;
 
-        return `
-          <div class="history-item">
-            <div>
+          return `
+            <div class="history-item">
+
+              <div>
+                <strong>
+                  ${esc(title)}
+                </strong>
+
+                <small>
+                  ${dateText(
+                    created
+                  )}
+                  ${timeText(
+                    created
+                  )}
+                </small>
+              </div>
+
               <strong>
-                ${esc(title)}
+                +${money(
+                  amount
+                )}
               </strong>
 
-              <small>
-                ${dateText(created)}
-                ${timeText(created)}
-              </small>
             </div>
-
-            <strong>
-              +${money(amount)}
-            </strong>
-          </div>
-        `;
-      })
-      .join("");
+          `;
+        })
+        .join("");
   }
 
   /* =========================================================
@@ -1301,7 +1607,9 @@
 
     try {
       const data =
-        await api("/api/notices");
+        await api(
+          "/api/notices"
+        );
 
       notices =
         Array.isArray(data)
@@ -1332,50 +1640,63 @@
       } else {
         list.innerHTML =
           notices
-            .map((notice) => {
-              const title =
-                notice.title ||
-                "Notice";
+            .map(
+              (notice) => {
+                const title =
+                  notice.title ||
+                  "Notice";
 
-              const body =
-                notice.message ||
-                notice.body ||
-                notice.content ||
-                "";
+                const body =
+                  notice.message ||
+                  notice.body ||
+                  notice.content ||
+                  "";
 
-              const created =
-                notice.created_at ||
-                notice.createdAt;
+                const created =
+                  notice.created_at ||
+                  notice.createdAt;
 
-              return `
-                <div class="notice-item">
-                  <h4>
-                    ${esc(title)}
-                  </h4>
+                return `
+                  <div class="notice-item">
 
-                  <p>
-                    ${esc(body)}
-                  </p>
+                    <h4>
+                      ${esc(
+                        title
+                      )}
+                    </h4>
 
-                  ${
-                    created
-                      ? `<small>
-                          ${dateText(created)}
-                        </small>`
-                      : ""
-                  }
-                </div>
-              `;
-            })
+                    <p>
+                      ${esc(
+                        body
+                      )}
+                    </p>
+
+                    ${
+                      created
+                        ? `
+                          <small>
+                            ${dateText(
+                              created
+                            )}
+                          </small>
+                        `
+                        : ""
+                    }
+
+                  </div>
+                `;
+              }
+            )
             .join("");
       }
     }
 
-    // Home notice
     const homeNotice =
       $("homeNotice");
 
-    if (homeNotice) {
+    if (
+      homeNotice
+    ) {
       const latest =
         notices[0];
 
@@ -1411,22 +1732,24 @@
   async function submitWithdrawal(
     event
   ) {
-    event?.preventDefault();
+    if (event) {
+      event.preventDefault();
+    }
 
     const method =
-      $("withdrawMethod")?.value ||
-      "";
+      $("withdrawMethod")
+        ?.value || "";
 
     const number =
-      $("withdrawNumber")?.value.trim() ||
-      "";
-
-    const amountValue =
-      $("withdrawAmount")?.value ||
-      "";
+      $("withdrawNumber")
+        ?.value
+        .trim() || "";
 
     const amount =
-      Number(amountValue);
+      Number(
+        $("withdrawAmount")
+          ?.value || 0
+      );
 
     const message =
       $("withdrawMessage");
@@ -1471,12 +1794,14 @@
       await api(
         "/api/withdrawals",
         {
-          method: "POST",
-          body: JSON.stringify({
-            method,
-            number,
-            amount
-          })
+          method:
+            "POST",
+          body:
+            JSON.stringify({
+              method,
+              number,
+              amount
+            })
         }
       );
 
@@ -1486,8 +1811,11 @@
         "success"
       );
 
-      if ($("withdrawAmount")) {
-        $("withdrawAmount").value = "";
+      if (
+        $("withdrawAmount")
+      ) {
+        $("withdrawAmount")
+          .value = "";
       }
 
       await refreshDashboard();
@@ -1501,30 +1829,9 @@
       showMessage(
         message,
         error.message ||
-        "Withdrawal request failed.",
+          "Withdrawal failed.",
         "error"
       );
-    }
-  }
-
-  /* =========================================================
-     FEE STATUS
-     ========================================================= */
-
-  async function loadFeeStatus() {
-    if (!session) return null;
-
-    try {
-      return await api(
-        "/api/fee-status"
-      );
-    } catch (error) {
-      console.warn(
-        "Fee status error:",
-        error
-      );
-
-      return null;
     }
   }
 
@@ -1533,14 +1840,8 @@
      ========================================================= */
 
   function openWhatsApp() {
-    const number =
-      "8801961504587";
-
-    const url =
-      `https://wa.me/${number}`;
-
     window.open(
-      url,
+      "https://wa.me/8801961504587",
       "_blank",
       "noopener,noreferrer"
     );
@@ -1555,7 +1856,298 @@
   }
 
   /* =========================================================
-     FULL REFRESH
+     NAVIGATION
+     ========================================================= */
+
+  function openSection(
+    name
+  ) {
+    const sections =
+      document.querySelectorAll(
+        "[data-section]"
+      );
+
+    sections.forEach(
+      (section) => {
+        section.classList.toggle(
+          "active",
+          section.dataset
+            .section === name
+        );
+      }
+    );
+
+    document
+      .querySelectorAll(
+        "[data-nav]"
+      )
+      .forEach(
+        (button) => {
+          button.classList.toggle(
+            "active",
+            button.dataset
+              .nav === name
+          );
+        }
+      );
+
+    const sectionIds = {
+      home:
+        "homeSection",
+      tasks:
+        "tasksSection",
+      history:
+        "historySection",
+      profile:
+        "profileSection"
+    };
+
+    Object.entries(
+      sectionIds
+    ).forEach(
+      ([sectionName, id]) => {
+        const el = $(id);
+
+        if (!el) return;
+
+        el.style.display =
+          sectionName ===
+          name
+            ? ""
+            : "none";
+      }
+    );
+
+    if (
+      name ===
+      "home"
+    ) {
+      refreshDashboard()
+        .catch(console.error);
+    }
+
+    if (
+      name ===
+      "tasks"
+    ) {
+      loadTasks()
+        .catch(console.error);
+    }
+
+    if (
+      name ===
+      "history"
+    ) {
+      loadHistory()
+        .catch(console.error);
+    }
+
+    if (
+      name ===
+      "profile"
+    ) {
+      renderUser();
+    }
+  }
+
+  /* =========================================================
+     EVENTS
+     ========================================================= */
+
+  function bindEvents() {
+
+    /* Login */
+    const loginForm =
+      $("loginForm");
+
+    if (loginForm) {
+      loginForm.addEventListener(
+        "submit",
+        login
+      );
+    }
+
+    /* Registration */
+    const registerForm =
+      $("registerForm");
+
+    if (registerForm) {
+      registerForm.addEventListener(
+        "submit",
+        register
+      );
+    }
+
+    /* Login / Registration tabs */
+    bindAuthTabs();
+
+    /* Logout */
+    document
+      .querySelectorAll(
+        "[data-action='logout'], #logoutBtn, .logout-btn"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            logout
+          );
+        }
+      );
+
+    /* Navigation */
+    document
+      .querySelectorAll(
+        "[data-nav]"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            () => {
+              openSection(
+                button.dataset
+                  .nav
+              );
+            }
+          );
+        }
+      );
+
+    /* Common navigation IDs */
+    const navMap = {
+      homeBtn:
+        "home",
+      homeNav:
+        "home",
+      tasksBtn:
+        "tasks",
+      tasksNav:
+        "tasks",
+      historyBtn:
+        "history",
+      historyNav:
+        "history",
+      profileBtn:
+        "profile",
+      profileNav:
+        "profile"
+    };
+
+    Object.entries(
+      navMap
+    ).forEach(
+      ([id, section]) => {
+        const button =
+          $(id);
+
+        if (!button) return;
+
+        button.addEventListener(
+          "click",
+          () => {
+            openSection(
+              section
+            );
+          }
+        );
+      }
+    );
+
+    /* Close task modal */
+    const close =
+      $("closeTaskModal");
+
+    if (close) {
+      close.addEventListener(
+        "click",
+        closeTaskModal
+      );
+    }
+
+    /* Cancel task */
+    const cancel =
+      $("cancelTaskBtn");
+
+    if (cancel) {
+      cancel.addEventListener(
+        "click",
+        cancelTask
+      );
+    }
+
+    /* Verify task */
+    const verify =
+      $("verifyTaskBtn");
+
+    if (verify) {
+      verify.addEventListener(
+        "click",
+        finishTask
+      );
+    }
+
+    /* Modal background */
+    const modal =
+      $("taskModal");
+
+    if (modal) {
+      modal.addEventListener(
+        "click",
+        (event) => {
+          if (
+            event.target ===
+              modal &&
+            !activeTaskId
+          ) {
+            closeTaskModal();
+          }
+        }
+      );
+    }
+
+    /* Withdraw */
+    const withdrawForm =
+      $("withdrawForm");
+
+    if (withdrawForm) {
+      withdrawForm.addEventListener(
+        "submit",
+        submitWithdrawal
+      );
+    }
+
+    /* WhatsApp */
+    document
+      .querySelectorAll(
+        "[data-support='whatsapp'], #whatsappSupport"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            openWhatsApp
+          );
+        }
+      );
+
+    /* Messenger */
+    document
+      .querySelectorAll(
+        "[data-support='messenger'], #messengerSupport"
+      )
+      .forEach(
+        (button) => {
+          button.addEventListener(
+            "click",
+            openMessenger
+          );
+        }
+      );
+  }
+
+  /* =========================================================
+     REFRESH EVERYTHING
      ========================================================= */
 
   async function refreshAll() {
@@ -1571,6 +2163,10 @@
     renderUser();
   }
 
+  /* =========================================================
+     OPEN DASHBOARD
+     ========================================================= */
+
   async function openDashboard() {
     showDashboard();
 
@@ -1585,234 +2181,39 @@
 
     await refreshAll();
 
-    openSection("home");
+    openSection(
+      "home"
+    );
   }
 
   /* =========================================================
-     EVENT BINDINGS
-     ========================================================= */
-
-  function bindEvents() {
-    // Login form
-    const loginForm =
-      $("loginForm");
-
-    if (loginForm) {
-      loginForm.addEventListener(
-        "submit",
-        login
-      );
-    }
-
-    // Register form
-    const registerForm =
-      $("registerForm");
-
-    if (registerForm) {
-      registerForm.addEventListener(
-        "submit",
-        register
-      );
-    }
-
-    // Logout buttons
-    document
-      .querySelectorAll(
-        "[data-action='logout'], #logoutBtn"
-      )
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          logout
-        );
-      });
-
-    // Navigation
-    document
-      .querySelectorAll("[data-nav]")
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            openSection(
-              button.dataset.nav
-            );
-          }
-        );
-      });
-
-    // Common nav IDs
-    const navMap = {
-      homeBtn: "home",
-      homeNav: "home",
-      tasksBtn: "tasks",
-      tasksNav: "tasks",
-      historyBtn: "history",
-      historyNav: "history",
-      profileBtn: "profile",
-      profileNav: "profile"
-    };
-
-    Object.entries(navMap)
-      .forEach(
-        ([id, section]) => {
-          const button = $(id);
-
-          if (!button) return;
-
-          button.addEventListener(
-            "click",
-            () => {
-              openSection(section);
-            }
-          );
-        }
-      );
-
-    // Profile support
-    document
-      .querySelectorAll(
-        "[data-support='whatsapp'], #whatsappSupport"
-      )
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          openWhatsApp
-        );
-      });
-
-    document
-      .querySelectorAll(
-        "[data-support='messenger'], #messengerSupport"
-      )
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          openMessenger
-        );
-      });
-
-    // Task modal close
-    const close =
-      $("closeTaskModal");
-
-    if (close) {
-      close.addEventListener(
-        "click",
-        closeTaskModal
-      );
-    }
-
-    // Cancel task
-    const cancel =
-      $("cancelTaskBtn");
-
-    if (cancel) {
-      cancel.addEventListener(
-        "click",
-        cancelTask
-      );
-    }
-
-    // Verify task button
-    const verify =
-      $("verifyTaskBtn");
-
-    if (verify) {
-      verify.addEventListener(
-        "click",
-        () => {
-          finishTask();
-        }
-      );
-    }
-
-    // Modal backdrop click
-    const modal =
-      $("taskModal");
-
-    if (modal) {
-      modal.addEventListener(
-        "click",
-        (event) => {
-          if (
-            event.target === modal &&
-            !activeTaskId
-          ) {
-            closeTaskModal();
-          }
-        }
-      );
-    }
-
-    // Withdraw form
-    const withdrawForm =
-      $("withdrawForm");
-
-    if (withdrawForm) {
-      withdrawForm.addEventListener(
-        "submit",
-        submitWithdrawal
-      );
-    }
-
-    // Withdraw button
-    const withdrawBtn =
-      $("withdrawBtn");
-
-    if (
-      withdrawBtn &&
-      !withdrawForm
-    ) {
-      withdrawBtn.addEventListener(
-        "click",
-        () => {
-          const form =
-            $("withdrawForm");
-
-          if (form) {
-            form.scrollIntoView({
-              behavior: "smooth"
-            });
-          }
-        }
-      );
-    }
-
-    // Any generic logout text buttons
-    document
-      .querySelectorAll(
-        ".logout-btn"
-      )
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          logout
-        );
-      });
-  }
-
-  /* =========================================================
-     STARTUP
+     INITIALIZATION
      ========================================================= */
 
   async function init() {
-    bindEvents();
 
     const savedUser =
       getSavedUser();
 
     if (savedUser) {
-      me = savedUser;
+      me =
+        savedUser;
     }
 
-    // Session না থাকলে login/register page
+    bindEvents();
+
+    /*
+     * Registration form থাকলে
+     * শুরুতে Login দেখাবে।
+     */
     if (!session) {
       showAuthPage();
       return;
     }
 
-    // Session আছে → user verify
+    /*
+     * পুরোনো session verify
+     */
     const currentUser =
       await loadMe();
 
@@ -1825,7 +2226,10 @@
     await openDashboard();
   }
 
-  // DOM ready
+  /* =========================================================
+     START
+     ========================================================= */
+
   if (
     document.readyState ===
     "loading"
