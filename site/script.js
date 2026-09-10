@@ -2,8 +2,7 @@
   "use strict";
 
   /* =========================================================
-     MASUD JR OFFICIAL
-     COMPLETE FRONTEND SCRIPT
+     MASUD JR OFFICIAL - COMPLETE SCRIPT
      ========================================================= */
 
   const RENDER_API =
@@ -34,19 +33,22 @@
   const TASK_DURATION = 10;
 
   /* =========================================================
-     BASIC HELPERS
+     HELPER
      ========================================================= */
 
-  const $ = (id) =>
-    document.getElementById(id);
+  const $ = (id) => document.getElementById(id);
 
   function setText(id, value) {
     const el = $(id);
 
     if (el) {
-      el.textContent =
-        value ?? "";
+      el.textContent = value ?? "";
     }
+  }
+
+  function money(value) {
+    const n = Number(value || 0);
+    return `৳${n.toFixed(2)}`;
   }
 
   function esc(value) {
@@ -56,11 +58,6 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
-  }
-
-  function money(value) {
-    const n = Number(value || 0);
-    return `৳${n.toFixed(2)}`;
   }
 
   function dateText(value) {
@@ -94,15 +91,10 @@
     });
   }
 
-  function showMessage(
-    element,
-    message,
-    type = ""
-  ) {
+  function showMessage(element, message, type = "") {
     if (!element) return;
 
-    element.textContent =
-      message || "";
+    element.textContent = message || "";
 
     element.classList.remove(
       "success",
@@ -120,12 +112,12 @@
      ========================================================= */
 
   function saveUser() {
-    if (me) {
-      localStorage.setItem(
-        USER_KEY,
-        JSON.stringify(me)
-      );
-    }
+    if (!me) return;
+
+    localStorage.setItem(
+      USER_KEY,
+      JSON.stringify(me)
+    );
   }
 
   function saveAuth(data) {
@@ -151,9 +143,7 @@
       const raw =
         localStorage.getItem(USER_KEY);
 
-      return raw
-        ? JSON.parse(raw)
-        : null;
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
@@ -176,52 +166,426 @@
      API
      ========================================================= */
 
-  async function api(
-    path,
-    options = {}
-  ) {
+  async function api(path, options = {}) {
     const headers = {
-      "Content-Type":
-        "application/json",
+      "Content-Type": "application/json",
       ...(options.headers || {})
     };
 
     if (session) {
-      headers["x-user-session"] =
-        session;
+      headers["x-user-session"] = session;
     }
 
-    const response =
-      await fetch(
-        `${API_BASE}${path}`,
-        {
-          ...options,
-          headers
-        }
-      );
+    const response = await fetch(
+      `${API_BASE}${path}`,
+      {
+        ...options,
+        headers
+      }
+    );
 
     const data =
-      await response
-        .json()
-        .catch(() => ({}));
+      await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const error =
-        new Error(
-          data.message ||
-          data.error ||
-          `Server error (${response.status})`
-        );
+      const error = new Error(
+        data.message ||
+        data.error ||
+        `Server error (${response.status})`
+      );
 
-      error.status =
-        response.status;
-
+      error.status = response.status;
       error.data = data;
 
       throw error;
     }
 
     return data;
+  }
+
+  /* =========================================================
+     AUTH TAB DESIGN
+     ========================================================= */
+
+  function installAuthStyles() {
+    if ($("mjr-auth-style")) return;
+
+    const style =
+      document.createElement("style");
+
+    style.id = "mjr-auth-style";
+
+    style.textContent = `
+      /* Login / Registration tabs */
+
+      #authPage .auth-tabs,
+      #authPage .tabs,
+      #authPage .auth-tab-wrap,
+      #authPage .tab-container {
+        display: flex !important;
+        gap: 0 !important;
+        padding: 5px !important;
+        border-radius: 16px !important;
+        background: #eef2f7 !important;
+      }
+
+      #authPage .auth-tabs button,
+      #authPage .tabs button,
+      #authPage .auth-tab,
+      #authPage .tab,
+      #authPage .tab-btn {
+        cursor: pointer !important;
+        transition:
+          all .2s ease !important;
+      }
+
+      #authPage .auth-tabs button:hover,
+      #authPage .tabs button:hover,
+      #authPage .auth-tab:hover,
+      #authPage .tab:hover,
+      #authPage .tab-btn:hover {
+        transform: translateY(-1px) !important;
+      }
+
+      #authPage .mjr-login-active {
+        background: #ffffff !important;
+        color: #2563eb !important;
+        border: 2px solid #111827 !important;
+        box-shadow:
+          0 4px 12px rgba(0,0,0,.08) !important;
+        font-weight: 700 !important;
+      }
+
+      #authPage .mjr-register-active {
+        background: #2563eb !important;
+        color: #ffffff !important;
+        border: 2px solid #2563eb !important;
+        box-shadow:
+          0 5px 15px rgba(37,99,235,.25) !important;
+        font-weight: 700 !important;
+      }
+
+      #authPage .mjr-login-inactive,
+      #authPage .mjr-register-inactive {
+        background: transparent !important;
+        color: #64748b !important;
+        border: 2px solid transparent !important;
+      }
+
+      /* Forms must remain visible when selected */
+
+      #authPage #loginForm.mjr-visible {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+
+      #authPage #registerForm.mjr-visible {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+
+      #authPage #loginForm.mjr-hidden,
+      #authPage #registerForm.mjr-hidden {
+        display: none !important;
+      }
+
+      /* Register button */
+
+      #authPage #registerForm button[type="submit"] {
+        background:
+          linear-gradient(
+            135deg,
+            #2563eb,
+            #4f46e5
+          ) !important;
+
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        box-shadow:
+          0 6px 18px rgba(37,99,235,.25) !important;
+      }
+
+      /* Login button */
+
+      #authPage #loginForm button[type="submit"] {
+        background:
+          linear-gradient(
+            135deg,
+            #2563eb,
+            #4f46e5
+          ) !important;
+
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        box-shadow:
+          0 6px 18px rgba(37,99,235,.25) !important;
+      }
+
+      #authPage button[type="submit"]:hover {
+        filter: brightness(1.06) !important;
+        transform: translateY(-1px) !important;
+      }
+    `;
+
+    document.head.appendChild(style);
+  }
+
+  /* =========================================================
+     FIND LOGIN / REGISTRATION TABS
+     ========================================================= */
+
+  function getAuthTabs() {
+    const elements =
+      Array.from(
+        document.querySelectorAll(
+          "#authPage button, #authPage a, #authPage [role='tab'], #authPage .tab, #authPage .tab-btn, #authPage .auth-tab"
+        )
+      );
+
+    return elements.filter((el) => {
+      const text =
+        el.textContent
+          .trim()
+          .toLowerCase();
+
+      return (
+        text === "login" ||
+        text === "registration" ||
+        text.includes("registration")
+      );
+    });
+  }
+
+  function styleAuthTabs(active) {
+    getAuthTabs().forEach((el) => {
+      const text =
+        el.textContent
+          .trim()
+          .toLowerCase();
+
+      const isLogin =
+        text === "login" ||
+        (
+          text.includes("login") &&
+          !text.includes("registration")
+        );
+
+      const isRegistration =
+        text.includes("registration");
+
+      el.classList.remove(
+        "mjr-login-active",
+        "mjr-register-active",
+        "mjr-login-inactive",
+        "mjr-register-inactive"
+      );
+
+      if (
+        active === "login" &&
+        isLogin
+      ) {
+        el.classList.add(
+          "mjr-login-active"
+        );
+      } else if (
+        active === "registration" &&
+        isRegistration
+      ) {
+        el.classList.add(
+          "mjr-register-active"
+        );
+      } else if (isLogin) {
+        el.classList.add(
+          "mjr-login-inactive"
+        );
+      } else if (isRegistration) {
+        el.classList.add(
+          "mjr-register-inactive"
+        );
+      }
+    });
+  }
+
+  /* =========================================================
+     LOGIN TAB
+     ========================================================= */
+
+  function activateLoginTab() {
+    installAuthStyles();
+
+    const loginForm =
+      $("loginForm");
+
+    const registerForm =
+      $("registerForm");
+
+    if (loginForm) {
+      loginForm.classList.remove(
+        "mjr-hidden"
+      );
+
+      loginForm.classList.add(
+        "mjr-visible"
+      );
+
+      loginForm.style.setProperty(
+        "display",
+        "block",
+        "important"
+      );
+
+      loginForm.style.setProperty(
+        "visibility",
+        "visible",
+        "important"
+      );
+
+      loginForm.style.setProperty(
+        "opacity",
+        "1",
+        "important"
+      );
+    }
+
+    if (registerForm) {
+      registerForm.classList.remove(
+        "mjr-visible"
+      );
+
+      registerForm.classList.add(
+        "mjr-hidden"
+      );
+
+      registerForm.style.setProperty(
+        "display",
+        "none",
+        "important"
+      );
+    }
+
+    styleAuthTabs("login");
+  }
+
+  /* =========================================================
+     REGISTRATION TAB
+     ========================================================= */
+
+  function activateRegistrationTab() {
+    installAuthStyles();
+
+    const loginForm =
+      $("loginForm");
+
+    const registerForm =
+      $("registerForm");
+
+    if (loginForm) {
+      loginForm.classList.remove(
+        "mjr-visible"
+      );
+
+      loginForm.classList.add(
+        "mjr-hidden"
+      );
+
+      loginForm.style.setProperty(
+        "display",
+        "none",
+        "important"
+      );
+    }
+
+    if (registerForm) {
+      registerForm.classList.remove(
+        "mjr-hidden"
+      );
+
+      registerForm.classList.add(
+        "mjr-visible"
+      );
+
+      registerForm.style.setProperty(
+        "display",
+        "block",
+        "important"
+      );
+
+      registerForm.style.setProperty(
+        "visibility",
+        "visible",
+        "important"
+      );
+
+      registerForm.style.setProperty(
+        "opacity",
+        "1",
+        "important"
+      );
+    }
+
+    styleAuthTabs(
+      "registration"
+    );
+  }
+
+  /* =========================================================
+     BIND AUTH TABS
+     ========================================================= */
+
+  function bindAuthTabs() {
+    installAuthStyles();
+
+    const tabs =
+      getAuthTabs();
+
+    tabs.forEach((tab) => {
+      if (
+        tab.dataset.mjrAuthBound ===
+        "1"
+      ) {
+        return;
+      }
+
+      tab.dataset.mjrAuthBound =
+        "1";
+
+      tab.addEventListener(
+        "click",
+        (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const text =
+            tab.textContent
+              .trim()
+              .toLowerCase();
+
+          if (
+            text.includes(
+              "registration"
+            )
+          ) {
+            activateRegistrationTab();
+          } else {
+            activateLoginTab();
+          }
+        }
+      );
+    });
+
+    /*
+     * Default screen:
+     * Login
+     */
+    activateLoginTab();
   }
 
   /* =========================================================
@@ -244,7 +608,7 @@
         "none";
     }
 
-    activateLoginTab();
+    bindAuthTabs();
   }
 
   function showDashboard() {
@@ -263,198 +627,6 @@
       dashboard.style.display =
         "";
     }
-  }
-
-  /* =========================================================
-     LOGIN / REGISTRATION TABS
-     ========================================================= */
-
-  function getAuthTabElements() {
-    const elements =
-      Array.from(
-        document.querySelectorAll(
-          "button, a, [role='tab'], .tab, .tab-btn, .auth-tab"
-        )
-      );
-
-    return elements.filter(
-      (el) => {
-        const text =
-          el.textContent
-            .trim()
-            .toLowerCase();
-
-        return (
-          text === "login" ||
-          text === "registration" ||
-          text.includes("registration")
-        );
-      }
-    );
-  }
-
-  function setAuthTabActive(
-    activeText
-  ) {
-    getAuthTabElements()
-      .forEach((el) => {
-        const text =
-          el.textContent
-            .trim()
-            .toLowerCase();
-
-        const isActive =
-          activeText ===
-          "registration"
-            ? text.includes(
-                "registration"
-              )
-            : text.includes("login") &&
-              !text.includes(
-                "registration"
-              );
-
-        el.classList.toggle(
-          "active",
-          isActive
-        );
-
-        el.setAttribute(
-          "aria-selected",
-          isActive
-            ? "true"
-            : "false"
-        );
-      });
-  }
-
-  function activateLoginTab() {function activateLoginTab() {
-  const loginForm = $("loginForm");
-  const registerForm = $("registerForm");
-
-  if (loginForm) {
-    loginForm.style.setProperty(
-      "display",
-      "block",
-      "important"
-    );
-  }
-
-  if (registerForm) {
-    registerForm.style.setProperty(
-      "display",
-      "none",
-      "important"
-    );
-  }
-
-  setAuthTabActive("login");
-}
-
-function activateRegistrationTab() {
-  const loginForm = $("loginForm");
-  const registerForm = $("registerForm");
-
-  if (loginForm) {
-    loginForm.style.setProperty(
-      "display",
-      "none",
-      "important"
-    );
-  }
-
-  if (registerForm) {
-    registerForm.style.setProperty(
-      "display",
-      "block",
-      "important"
-    );
-  }
-
-  setAuthTabActive("registration");
-}
-    const loginForm =
-      $("loginForm");
-
-    const registerForm =
-      $("registerForm");
-
-    if (loginForm) {
-      loginForm.style.display =
-        "";
-    }
-
-    if (registerForm) {
-      registerForm.style.display =
-        "none";
-    }
-
-    setAuthTabActive(
-      "login"
-    );
-  }
-
-  function activateRegistrationTab() {
-    const loginForm =
-      $("loginForm");
-
-    const registerForm =
-      $("registerForm");
-
-    if (loginForm) {
-      loginForm.style.display =
-        "none";
-    }
-
-    if (registerForm) {
-      registerForm.style.display =
-        "";
-    }
-
-    setAuthTabActive(
-      "registration"
-    );
-  }
-
-  function bindAuthTabs() {
-    const elements =
-      getAuthTabElements();
-
-    elements.forEach((el) => {
-      // একই element-এ বারবার listener না বসানোর জন্য
-      if (
-        el.dataset.authTabBound ===
-        "1"
-      ) {
-        return;
-      }
-
-      el.dataset.authTabBound =
-        "1";
-
-      el.addEventListener(
-        "click",
-        (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          const text =
-            el.textContent
-              .trim()
-              .toLowerCase();
-
-          if (
-            text.includes(
-              "registration"
-            )
-          ) {
-            activateRegistrationTab();
-          } else {
-            activateLoginTab();
-          }
-        }
-      );
-    });
   }
 
   /* =========================================================
@@ -656,7 +828,7 @@ function activateRegistrationTab() {
   }
 
   /* =========================================================
-     CURRENT USER
+     ME
      ========================================================= */
 
   async function loadMe() {
@@ -741,41 +913,6 @@ function activateRegistrationTab() {
       dateText(joined)
     );
 
-    const avatarIds = [
-      "authAvatar",
-      "userAvatar",
-      "profileAvatar"
-    ];
-
-    avatarIds.forEach(
-      (id) => {
-        const avatar = $(id);
-
-        if (!avatar) return;
-
-        if (
-          avatar.tagName ===
-          "IMG"
-        ) {
-          if (
-            !avatar.getAttribute(
-              "src"
-            )
-          ) {
-            avatar.src =
-              "profile.jpg";
-          }
-
-          avatar.alt = name;
-        } else {
-          avatar.textContent =
-            name
-              .charAt(0)
-              .toUpperCase();
-        }
-      }
-    );
-
     setText(
       "profileBalance",
       money(me.balance)
@@ -783,16 +920,12 @@ function activateRegistrationTab() {
 
     setText(
       "profileToday",
-      money(
-        me.todayEarnings
-      )
+      money(me.todayEarnings)
     );
 
     setText(
       "profileTotal",
-      money(
-        me.totalEarnings
-      )
+      money(me.totalEarnings)
     );
 
     setText(
@@ -801,6 +934,36 @@ function activateRegistrationTab() {
         me.completedCount || 0
       )
     );
+
+    const avatarIds = [
+      "authAvatar",
+      "userAvatar",
+      "profileAvatar"
+    ];
+
+    avatarIds.forEach((id) => {
+      const avatar = $(id);
+
+      if (!avatar) return;
+
+      if (
+        avatar.tagName === "IMG"
+      ) {
+        if (
+          !avatar.getAttribute("src")
+        ) {
+          avatar.src =
+            "profile.jpg";
+        }
+
+        avatar.alt = name;
+      } else {
+        avatar.textContent =
+          name
+            .charAt(0)
+            .toUpperCase();
+      }
+    });
   }
 
   /* =========================================================
@@ -1036,6 +1199,7 @@ function activateRegistrationTab() {
               class="task-card"
               data-task-id="${esc(id)}"
             >
+
               <div class="task-card-content">
 
                 <h3>
@@ -1080,21 +1244,19 @@ function activateRegistrationTab() {
       .querySelectorAll(
         "[data-start-task]"
       )
-      .forEach(
-        (button) => {
-          button.addEventListener(
-            "click",
-            () => {
-              startTask(
-                Number(
-                  button.dataset
-                    .startTask
-                )
-              );
-            }
-          );
-        }
-      );
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          () => {
+            startTask(
+              Number(
+                button.dataset
+                  .startTask
+              )
+            );
+          }
+        );
+      });
   }
 
   function findTask(id) {
@@ -1238,8 +1400,6 @@ function activateRegistrationTab() {
     if (verify) {
       verify.disabled =
         true;
-      verify.style.display =
-        "";
     }
 
     const cancel =
@@ -1273,20 +1433,16 @@ function activateRegistrationTab() {
   }
 
   /* =========================================================
-     TASK TIMER + HEARTBEAT
+     TASK TIMER
      ========================================================= */
 
   function startTaskTimers() {
-    stopTaskTimers(
-      false
-    );
+    stopTaskTimers(false);
 
     heartbeatTimer =
       setInterval(
         async () => {
-          if (
-            !activeTaskId
-          ) {
+          if (!activeTaskId) {
             return;
           }
 
@@ -1298,9 +1454,7 @@ function activateRegistrationTab() {
                   "POST"
               }
             );
-          } catch (
-            error
-          ) {
+          } catch (error) {
             console.warn(
               "Heartbeat failed:",
               error
@@ -1313,9 +1467,7 @@ function activateRegistrationTab() {
     taskTimer =
       setInterval(
         async () => {
-          if (
-            !activeTaskId
-          ) {
+          if (!activeTaskId) {
             return;
           }
 
@@ -1356,17 +1508,6 @@ function activateRegistrationTab() {
 
             progress.style.width =
               `${percent}%`;
-          }
-
-          const status =
-            $("modalStatus");
-
-          if (
-            status &&
-            remaining > 0
-          ) {
-            status.textContent =
-              `Please wait ${remaining}s...`;
           }
 
           if (
@@ -1437,11 +1578,8 @@ function activateRegistrationTab() {
       }
 
       /*
-       * সবচেয়ে গুরুত্বপূর্ণ:
-       * Task complete হওয়ার পর
-       * Dashboard + Balance আবার load হবে।
+       * Balance immediately refresh
        */
-
       await refreshAll();
 
       setTimeout(
@@ -1491,9 +1629,7 @@ function activateRegistrationTab() {
               "POST"
           }
         );
-      } catch (
-        error
-      ) {
+      } catch (error) {
         console.warn(
           "Cancel task error:",
           error
@@ -1738,9 +1874,7 @@ function activateRegistrationTab() {
     const homeNotice =
       $("homeNotice");
 
-    if (
-      homeNotice
-    ) {
+    if (homeNotice) {
       const latest =
         notices[0];
 
@@ -1816,10 +1950,7 @@ function activateRegistrationTab() {
       return;
     }
 
-    if (
-      !amount ||
-      amount <= 0
-    ) {
+    if (!amount || amount <= 0) {
       showMessage(
         message,
         "সঠিক amount দিন।",
@@ -1903,9 +2034,7 @@ function activateRegistrationTab() {
      NAVIGATION
      ========================================================= */
 
-  function openSection(
-    name
-  ) {
+  function openSection(name) {
     const sections =
       document.querySelectorAll(
         "[data-section]"
@@ -1915,8 +2044,8 @@ function activateRegistrationTab() {
       (section) => {
         section.classList.toggle(
           "active",
-          section.dataset
-            .section === name
+          section.dataset.section ===
+            name
         );
       }
     );
@@ -1929,8 +2058,8 @@ function activateRegistrationTab() {
         (button) => {
           button.classList.toggle(
             "active",
-            button.dataset
-              .nav === name
+            button.dataset.nav ===
+              name
           );
         }
       );
@@ -1955,41 +2084,28 @@ function activateRegistrationTab() {
         if (!el) return;
 
         el.style.display =
-          sectionName ===
-          name
+          sectionName === name
             ? ""
             : "none";
       }
     );
 
-    if (
-      name ===
-      "home"
-    ) {
+    if (name === "home") {
       refreshDashboard()
         .catch(console.error);
     }
 
-    if (
-      name ===
-      "tasks"
-    ) {
+    if (name === "tasks") {
       loadTasks()
         .catch(console.error);
     }
 
-    if (
-      name ===
-      "history"
-    ) {
+    if (name === "history") {
       loadHistory()
         .catch(console.error);
     }
 
-    if (
-      name ===
-      "profile"
-    ) {
+    if (name === "profile") {
       renderUser();
     }
   }
@@ -2022,7 +2138,7 @@ function activateRegistrationTab() {
       );
     }
 
-    /* Login / Registration tabs */
+    /* Auth tabs */
     bindAuthTabs();
 
     /* Logout */
@@ -2050,8 +2166,7 @@ function activateRegistrationTab() {
             "click",
             () => {
               openSection(
-                button.dataset
-                  .nav
+                button.dataset.nav
               );
             }
           );
@@ -2098,7 +2213,7 @@ function activateRegistrationTab() {
       }
     );
 
-    /* Close task modal */
+    /* Close task */
     const close =
       $("closeTaskModal");
 
@@ -2128,25 +2243,6 @@ function activateRegistrationTab() {
       verify.addEventListener(
         "click",
         finishTask
-      );
-    }
-
-    /* Modal background */
-    const modal =
-      $("taskModal");
-
-    if (modal) {
-      modal.addEventListener(
-        "click",
-        (event) => {
-          if (
-            event.target ===
-              modal &&
-            !activeTaskId
-          ) {
-            closeTaskModal();
-          }
-        }
       );
     }
 
@@ -2225,39 +2321,30 @@ function activateRegistrationTab() {
 
     await refreshAll();
 
-    openSection(
-      "home"
-    );
+    openSection("home");
   }
 
   /* =========================================================
-     INITIALIZATION
+     INIT
      ========================================================= */
 
   async function init() {
+    installAuthStyles();
 
     const savedUser =
       getSavedUser();
 
     if (savedUser) {
-      me =
-        savedUser;
+      me = savedUser;
     }
 
     bindEvents();
 
-    /*
-     * Registration form থাকলে
-     * শুরুতে Login দেখাবে।
-     */
     if (!session) {
       showAuthPage();
       return;
     }
 
-    /*
-     * পুরোনো session verify
-     */
     const currentUser =
       await loadMe();
 
