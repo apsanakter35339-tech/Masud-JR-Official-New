@@ -1584,6 +1584,24 @@ app.use(
 );
 
 app.get(
+  '/admin',
+  (req,res)=>{
+    res.sendFile(
+      path.join(__dirname,'..','admin','index.html')
+    );
+  }
+);
+
+app.get(
+  '/admin/',
+  (req,res)=>{
+    res.sendFile(
+      path.join(__dirname,'..','admin','index.html')
+    );
+  }
+);
+
+app.get(
   '*',
   (req,res)=>{
     res.sendFile(
