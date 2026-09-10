@@ -328,7 +328,51 @@
       });
   }
 
-  function activateLoginTab() {
+  function activateLoginTab() {function activateLoginTab() {
+  const loginForm = $("loginForm");
+  const registerForm = $("registerForm");
+
+  if (loginForm) {
+    loginForm.style.setProperty(
+      "display",
+      "block",
+      "important"
+    );
+  }
+
+  if (registerForm) {
+    registerForm.style.setProperty(
+      "display",
+      "none",
+      "important"
+    );
+  }
+
+  setAuthTabActive("login");
+}
+
+function activateRegistrationTab() {
+  const loginForm = $("loginForm");
+  const registerForm = $("registerForm");
+
+  if (loginForm) {
+    loginForm.style.setProperty(
+      "display",
+      "none",
+      "important"
+    );
+  }
+
+  if (registerForm) {
+    registerForm.style.setProperty(
+      "display",
+      "block",
+      "important"
+    );
+  }
+
+  setAuthTabActive("registration");
+}
     const loginForm =
       $("loginForm");
 
