@@ -1,1 +1,425 @@
-<!doctype html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Masud JR Admin</title><link rel="stylesheet" href="style.css"></head><body><div id="login" class="auth"><div class="box"><div class="logo">MJ</div><h1>Masud JR Admin</h1><input id="user" placeholder="Admin username"><input id="pass" type="password" placeholder="Admin password"><button onclick="login()">Login</button><p id="msg"></p></div></div><div id="app" class="hidden"><header><h1>Masud JR Admin</h1><button onclick="logout()">Logout</button></header><main><div class="cards"><div><span>Users</span><b id="users">0</b></div><div><span>Active</span><b id="active">0</b></div><div><span>Pending Withdrawals</span><b id="pending">0</b></div><div><span>Paid</span><b id="paid">৳0</b></div></div><section><h2>User Management</h2><div id="userTable"></div></section><section><h2>Task Management</h2><form id="taskForm"><input id="tTitle" placeholder="Task title"><input id="tType" placeholder="Type"><input id="tUrl" placeholder="URL"><input id="tReward" type="number" placeholder="Reward"><input id="tDesc" placeholder="Description"><button>Add Task</button></form><div id="taskTable"></div></section><section><h2>Fee Payment Verification</h2><div id="feeTable"></div></section><section><h2>Withdrawal Management</h2><div id="withdrawTable"></div></section><section><h2>Notice Management</h2><form id="noticeForm"><input id="nTitle" placeholder="Notice title"><textarea id="nMsg" placeholder="Notice message"></textarea><button>Add Notice</button></form><div id="noticeTable"></div></section></main></div><script src="script.js"></script></body></html>
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Masud JR Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- =========================
+       LOGIN
+  ========================== -->
+  <div id="login" class="auth">
+    <div class="login-card">
+      <div class="login-logo">MJ</div>
+
+      <h1>Masud JR Admin</h1>
+      <p>Administrator Login</p>
+
+      <input
+        id="user"
+        placeholder="Admin username"
+        autocomplete="username"
+      >
+
+      <input
+        id="pass"
+        type="password"
+        placeholder="Admin password"
+        autocomplete="current-password"
+      >
+
+      <button onclick="login()">Login</button>
+
+      <p id="msg"></p>
+    </div>
+  </div>
+
+
+  <!-- =========================
+       ADMIN APP
+  ========================== -->
+  <div id="app" class="hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+
+      <div class="brand">
+        <div class="brand-logo">MJ</div>
+        <div>
+          <strong>Masud JR</strong>
+          <span>Admin</span>
+        </div>
+      </div>
+
+      <div class="admin-profile">
+        <div class="profile-image-wrap">
+          <img src="/profile.jpg" alt="Masud JR">
+          <span class="online-dot"></span>
+        </div>
+
+        <h2>Masud JR</h2>
+        <p>🛡 Administrator</p>
+      </div>
+
+      <nav class="side-nav">
+
+        <a class="active" href="#dashboard">
+          <span>⌂</span>
+          <b>Dashboard</b>
+        </a>
+
+        <a href="#users">
+          <span>♟</span>
+          <b>User Management</b>
+        </a>
+
+        <a href="#tasks">
+          <span>▣</span>
+          <b>Task Management</b>
+        </a>
+
+        <a href="#add-task">
+          <span>＋</span>
+          <b>Add Task</b>
+        </a>
+
+        <a href="#fees">
+          <span>▣</span>
+          <b>Fee Verification</b>
+        </a>
+
+        <a href="#withdrawals">
+          <span>▱</span>
+          <b>Withdrawals</b>
+        </a>
+
+        <a href="#notices">
+          <span>♟</span>
+          <b>Notice Management</b>
+        </a>
+
+      </nav>
+
+      <button class="sidebar-logout" onclick="logout()">
+        <span>⇥</span>
+        Logout
+      </button>
+
+      <div class="sidebar-footer">
+        <strong>Masud JR Official</strong>
+        <span>♥ Together We Grow</span>
+      </div>
+
+    </aside>
+
+
+    <!-- MAIN -->
+    <main class="main-content">
+
+      <!-- TOP BAR -->
+      <header class="topbar">
+
+        <div class="topbar-title">
+          <button class="menu-button">☰</button>
+          <h1>Masud JR Admin Panel</h1>
+        </div>
+
+        <div class="topbar-right">
+          <span class="notification">♧<i>3</i></span>
+
+          <div class="date-box">
+            <span>▣</span>
+            <span>Admin Dashboard</span>
+          </div>
+        </div>
+
+      </header>
+
+
+      <!-- CONTENT -->
+      <div class="content">
+
+
+        <!-- HERO -->
+        <section class="welcome-card" id="dashboard">
+
+          <div class="welcome-text">
+            <span class="welcome-small">WELCOME BACK,</span>
+
+            <h2>
+              Masud <strong>JR</strong>
+            </h2>
+
+            <p>
+              Manage your platform easily from here.
+            </p>
+
+            <div class="motto">
+              <span>Dream</span>
+              <b>•</b>
+              <span>Work</span>
+              <b>•</b>
+              <span>Achieve</span>
+            </div>
+          </div>
+
+          <div class="welcome-photo">
+            <img src="/profile.jpg" alt="Masud JR">
+          </div>
+
+          <div class="welcome-brand">
+            <span>♕</span>
+            <strong>Masud JR</strong>
+            <small>Official</small>
+          </div>
+
+        </section>
+
+
+        <!-- STATS -->
+        <section class="stats-grid">
+
+          <div class="stat-card users-card">
+            <div class="stat-icon">♟</div>
+            <span>Users</span>
+            <strong id="users">0</strong>
+            <small>Registered users</small>
+          </div>
+
+          <div class="stat-card active-card">
+            <div class="stat-icon">✓</div>
+            <span>Active</span>
+            <strong id="active">0</strong>
+            <small>Active users</small>
+          </div>
+
+          <div class="stat-card pending-card">
+            <div class="stat-icon">◷</div>
+            <span>Pending Withdrawals</span>
+            <strong id="pending">0</strong>
+            <small>Need review</small>
+          </div>
+
+          <div class="stat-card paid-card">
+            <div class="stat-icon">৳</div>
+            <span>Paid</span>
+            <strong id="paid">৳0</strong>
+            <small>Total paid</small>
+          </div>
+
+        </section>
+
+
+        <!-- QUICK ACCESS -->
+        <section class="quick-access">
+
+          <div class="section-heading">
+            <span>ϟ</span>
+            <h2>Quick Access</h2>
+          </div>
+
+          <div class="quick-grid">
+
+            <a href="#users" class="quick-card">
+              <div class="quick-icon purple">♟</div>
+              <div>
+                <strong>User Management</strong>
+                <small>Manage all users</small>
+              </div>
+            </a>
+
+            <a href="#tasks" class="quick-card">
+              <div class="quick-icon blue">▣</div>
+              <div>
+                <strong>Task Management</strong>
+                <small>View and manage tasks</small>
+              </div>
+            </a>
+
+            <a href="#add-task" class="quick-card">
+              <div class="quick-icon green">＋</div>
+              <div>
+                <strong>Add Task</strong>
+                <small>Create new task</small>
+              </div>
+            </a>
+
+            <a href="#fees" class="quick-card">
+              <div class="quick-icon orange">▣</div>
+              <div>
+                <strong>Fee Payment Verification</strong>
+                <small>Verify payment requests</small>
+              </div>
+            </a>
+
+            <a href="#withdrawals" class="quick-card">
+              <div class="quick-icon pink">▱</div>
+              <div>
+                <strong>Withdrawal Management</strong>
+                <small>Manage withdrawal requests</small>
+              </div>
+            </a>
+
+            <a href="#notices" class="quick-card">
+              <div class="quick-icon violet">♟</div>
+              <div>
+                <strong>Notice Management</strong>
+                <small>View all notices</small>
+              </div>
+            </a>
+
+          </div>
+
+        </section>
+
+
+        <!-- USER MANAGEMENT -->
+        <section class="admin-section" id="users">
+
+          <div class="section-heading">
+            <span>♟</span>
+            <h2>User Management</h2>
+          </div>
+
+          <div id="userTable"></div>
+
+        </section>
+
+
+        <!-- TASK MANAGEMENT -->
+        <section class="admin-section" id="tasks">
+
+          <div class="section-heading">
+            <span>▣</span>
+            <h2>Task Management</h2>
+          </div>
+
+          <div id="add-task" class="form-card">
+
+            <form id="taskForm">
+
+              <input
+                id="tTitle"
+                placeholder="Task title"
+              >
+
+              <input
+                id="tType"
+                placeholder="Type"
+              >
+
+              <input
+                id="tUrl"
+                placeholder="URL"
+              >
+
+              <input
+                id="tReward"
+                type="number"
+                placeholder="Reward"
+              >
+
+              <input
+                id="tDesc"
+                placeholder="Description"
+              >
+
+              <button type="submit">
+                ＋ Add Task
+              </button>
+
+            </form>
+
+          </div>
+
+          <div id="taskTable"></div>
+
+        </section>
+
+
+        <!-- FEES -->
+        <section class="admin-section" id="fees">
+
+          <div class="section-heading">
+            <span>▣</span>
+            <h2>Fee Payment Verification</h2>
+          </div>
+
+          <div id="feeTable"></div>
+
+        </section>
+
+
+        <!-- WITHDRAWALS -->
+        <section class="admin-section" id="withdrawals">
+
+          <div class="section-heading">
+            <span>৳</span>
+            <h2>Withdrawal Management</h2>
+          </div>
+
+          <div id="withdrawTable"></div>
+
+        </section>
+
+
+        <!-- NOTICES -->
+        <section class="admin-section" id="notices">
+
+          <div class="section-heading">
+            <span>♟</span>
+            <h2>Notice Management</h2>
+          </div>
+
+          <div class="form-card">
+
+            <form id="noticeForm">
+
+              <input
+                id="nTitle"
+                placeholder="Notice title"
+              >
+
+              <textarea
+                id="nMsg"
+                placeholder="Notice message"
+              ></textarea>
+
+              <button type="submit">
+                ＋ Add Notice
+              </button>
+
+            </form>
+
+          </div>
+
+          <div id="noticeTable"></div>
+
+        </section>
+
+
+        <!-- FOOTER -->
+        <footer class="admin-footer">
+
+          <span>© 2025 Masud JR Official. All rights reserved.</span>
+
+          <strong>
+            Build Your Future ♡
+          </strong>
+
+        </footer>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <script src="script.js"></script>
+
+</body>
+</html>
