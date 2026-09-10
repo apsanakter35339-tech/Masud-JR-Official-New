@@ -1,32 +1,44 @@
 (() => {
   "use strict";
 
-  const API_BASE = (window.API_BASE || "").replace(/\/$/, "");
+  /* =========================================================
+     MASUD JR OFFICIAL
+     Frontend API connection
+     ========================================================= */
 
-  const state = {
-    user: null,
-    session: "",
-    tasks: [],
-    notices: [],
-    history: [],
-    balance: 0,
-    todayIncome: 0,
-    totalIncome: 0,
-    completedCount: 0,
-    activeTask: null,
-    taskTimer: null,
-    heartbeatTimer: null,
-    taskStartedAt: null
-  };
+  const RENDER_API = "https://masud-jr-official-online.onrender.com";
+
+  // Render-এর নিজের domain হলে same-origin API ব্যবহার করবে।
+  // Netlify/অন্য hosting হলে Render API ব্যবহার করবে।
+  const API_BASE = location.hostname.endsWith(".onrender.com")
+    ? ""
+    : RENDER_API;
+
+  const USER_SESSION_KEY = "mjrUserSessionV2";
+  const USER_KEY = "mjrUserV2";
+
+  let session = localStorage.getItem(USER_SESSION_KEY) || "";
+  let me = null;
+
+  let tasks = [];
+  let notices = [];
+
+  let activeTaskId = null;
+  let activeTask = null;
+
+  let taskTimer = null;
+  let heartbeatTimer = null;
+
+  let taskStartedAt = 0;
+  const TASK_DURATION = 10;
+
+  /* =========================================================
+     HELPERS
+     ========================================================= */
 
   const $ = (id) => document.getElementById(id);
 
-  function money(value) {
-    const number = Number(value || 0);
-    return `৳${number.toLocaleString("en-BD")}`;
-  }
-
-  function escapeHTML(value) {
+  function esc(value) {
     return String(value ?? "")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -35,1616 +47,1795 @@
       .replace(/'/g, "&#039;");
   }
 
-  function initials(name) {
-    const text = String(name || "MJ").trim();
-
-    if (!text) return "MJ";
-
-    const parts = text.split(/\s+/).filter(Boolean);
-
-    if (parts.length >= 2) {
-      return (
-        parts[0].charAt(0) +
-        parts[parts.length - 1].charAt(0)
-      ).toUpperCase();
-    }
-
-    return text.substring(0, 2).toUpperCase();
+  function money(value) {
+    const n = Number(value || 0);
+    return `৳${n.toFixed(2)}`;
   }
 
-  function showMessage(element, message, success = false) {
+  function dateText(value) {
+    if (!value) return "-";
+
+    const d = new Date(value);
+
+    if (Number.isNaN(d.getTime())) {
+      return String(value);
+    }
+
+    return d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    });
+  }
+
+  function timeText(value) {
+    if (!value) return "";
+
+    const d = new Date(value);
+
+    if (Number.isNaN(d.getTime())) {
+      return "";
+    }
+
+    return d.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function showMessage(element, message, type = "") {
     if (!element) return;
 
     element.textContent = message || "";
-    element.style.color = success ? "#16a34a" : "#dc2626";
-  }
 
-  function saveSession(session) {
-    if (session) {
-      localStorage.setItem("masud_jr_session", session);
+    element.classList.remove(
+      "success",
+      "error",
+      "warning"
+    );
+
+    if (type) {
+      element.classList.add(type);
     }
   }
 
-  function loadSession() {
-    return localStorage.getItem("masud_jr_session") || "";
+  function saveUser() {
+    if (me) {
+      localStorage.setItem(USER_KEY, JSON.stringify(me));
+    }
   }
 
-  function clearSession() {
-    localStorage.removeItem("masud_jr_session");
+  function clearAuth() {
+    session = "";
+    me = null;
+
+    localStorage.removeItem(USER_SESSION_KEY);
+    localStorage.removeItem(USER_KEY);
   }
 
-  function saveUser(user) {
-    localStorage.setItem(
-      "masud_jr_user",
-      JSON.stringify(user)
-    );
+  function saveAuth(data) {
+    if (!data) return;
+
+    if (data.session) {
+      session = data.session;
+      localStorage.setItem(USER_SESSION_KEY, session);
+    }
+
+    if (data.user) {
+      me = data.user;
+      saveUser();
+    }
   }
 
-  function loadSavedUser() {
+  function getSavedUser() {
     try {
-      const saved =
-        localStorage.getItem("masud_jr_user");
-
-      return saved ? JSON.parse(saved) : null;
+      const raw = localStorage.getItem(USER_KEY);
+      return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
   }
 
-  function clearSavedUser() {
-    localStorage.removeItem("masud_jr_user");
-  }
+  /* =========================================================
+     API
+     ========================================================= */
 
   async function api(path, options = {}) {
-    if (!API_BASE) {
-      throw new Error(
-        "API server address পাওয়া যায়নি।"
-      );
-    }
-
     const headers = {
       "Content-Type": "application/json",
       ...(options.headers || {})
     };
 
-    if (state.session) {
-      headers["x-user-session"] = state.session;
+    if (session) {
+      headers["x-user-session"] = session;
     }
+
+    const config = {
+      ...options,
+      headers
+    };
 
     const response = await fetch(
       `${API_BASE}${path}`,
-      {
-        method: options.method || "GET",
-        headers,
-        body:
-          options.body !== undefined
-            ? JSON.stringify(options.body)
-            : undefined
-      }
+      config
     );
 
-    let data = {};
-
-    try {
-      data = await response.json();
-    } catch {
-      data = {};
-    }
+    const data = await response
+      .json()
+      .catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(
+      const error = new Error(
         data.message ||
         data.error ||
         `Server error (${response.status})`
       );
+
+      error.status = response.status;
+      error.data = data;
+
+      throw error;
     }
 
     return data;
   }
 
-  function setLoggedIn(user, session) {
-    state.user = user;
-    state.session = session || state.session;
+  /* =========================================================
+     PAGE / SECTION CONTROL
+     ========================================================= */
 
-    if (state.session) {
-      saveSession(state.session);
+  function showAuthPage() {
+    if ($("authPage")) {
+      $("authPage").style.display = "";
     }
 
-    saveUser(user);
-
-    $("authPage")?.classList.add("hidden");
-    $("dashboard")?.classList.remove("hidden");
-
-    updateProfileUI();
-    loadDashboard();
-  }
-
-  async function logout() {
-    try {
-      if (state.session) {
-        await api("/api/logout", {
-          method: "POST"
-        });
-      }
-    } catch (error) {
-      console.warn("Logout:", error.message);
-    }
-
-    clearSession();
-    clearSavedUser();
-
-    state.user = null;
-    state.session = "";
-    state.tasks = [];
-    state.notices = [];
-    state.history = [];
-    state.balance = 0;
-    state.todayIncome = 0;
-    state.totalIncome = 0;
-    state.completedCount = 0;
-
-    stopTaskTimer();
-    stopHeartbeat();
-
-    $("dashboard")?.classList.add("hidden");
-    $("authPage")?.classList.remove("hidden");
-
-    showSection("home");
-  }
-
-  function updateProfileUI() {
-    if (!state.user) return;
-
-    const name =
-      state.user.name ||
-      state.user.username ||
-      "User";
-
-    const id =
-      state.user.id ||
-      state.user.userId ||
-      "-";
-
-    const avatarText = initials(name);
-
-    if ($("authAvatar")) {
-      $("authAvatar").textContent = avatarText;
-    }
-
-    if ($("userAvatar")) {
-      $("userAvatar").textContent = avatarText;
-    }
-
-    if ($("profileAvatar")) {
-      $("profileAvatar").textContent = avatarText;
-    }
-
-    if ($("headerUserName")) {
-      $("headerUserName").textContent = name;
-    }
-
-    if ($("profileName")) {
-      $("profileName").textContent = name;
-    }
-
-    if ($("profileId")) {
-      $("profileId").textContent = id;
-    }
-
-    if ($("profileJoined")) {
-      $("profileJoined").textContent =
-        state.user.created_at
-          ? formatDate(state.user.created_at)
-          : state.user.createdAt
-            ? formatDate(state.user.createdAt)
-            : "-";
+    if ($("dashboard")) {
+      $("dashboard").style.display = "none";
     }
   }
 
-  function formatDate(value) {
-    if (!value) return "-";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return String(value);
+  function showDashboard() {
+    if ($("authPage")) {
+      $("authPage").style.display = "none";
     }
 
-    return date.toLocaleDateString(
-      "bn-BD",
-      {
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-      }
+    if ($("dashboard")) {
+      $("dashboard").style.display = "";
+    }
+  }
+
+  function openSection(name) {
+    const sections = document.querySelectorAll(
+      "[data-section]"
     );
-  }
 
-  function formatDateTime(value) {
-    if (!value) return "-";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return String(value);
-    }
-
-    return date.toLocaleString(
-      "bn-BD",
-      {
-        dateStyle: "medium",
-        timeStyle: "short"
-      }
-    );
-  }
-
-  function showSection(sectionName) {
-    document
-      .querySelectorAll(".page-section")
-      .forEach((section) => {
-        section.classList.remove(
-          "active-section"
-        );
-      });
+    sections.forEach((section) => {
+      section.classList.toggle(
+        "active",
+        section.dataset.section === name
+      );
+    });
 
     document
-      .querySelector(
-        `#section-${sectionName}`
-      )
-      ?.classList.add("active-section");
-
-    document
-      .querySelectorAll(".nav-btn")
+      .querySelectorAll("[data-nav]")
       .forEach((button) => {
         button.classList.toggle(
           "active",
-          button.dataset.section === sectionName
+          button.dataset.nav === name
         );
       });
 
-    if (sectionName === "withdraw") {
-      renderBalance();
+    // Existing IDs থাকলে সেগুলোও handle করবে
+    const ids = [
+      "homeSection",
+      "tasksSection",
+      "historySection",
+      "profileSection"
+    ];
+
+    ids.forEach((id) => {
+      const el = $(id);
+      if (!el) return;
+
+      const sectionName = id
+        .replace("Section", "")
+        .toLowerCase();
+
+      el.style.display =
+        sectionName === name.toLowerCase()
+          ? ""
+          : "none";
+    });
+
+    if (name === "home") {
+      refreshDashboard().catch(console.error);
+    }
+
+    if (name === "tasks") {
+      loadTasks().catch(console.error);
+    }
+
+    if (name === "history") {
+      loadHistory().catch(console.error);
+    }
+
+    if (name === "profile") {
+      renderProfile();
     }
   }
 
-  function renderBalance() {
-    if ($("homeBalance")) {
-      $("homeBalance").textContent =
-        money(state.balance);
-    }
-
-    if ($("balanceAmount")) {
-      $("balanceAmount").textContent =
-        money(state.balance);
-    }
-
-    if ($("todayIncome")) {
-      $("todayIncome").textContent =
-        money(state.todayIncome);
-    }
-
-    if ($("balanceToday")) {
-      $("balanceToday").textContent =
-        money(state.todayIncome);
-    }
-
-    if ($("totalIncome")) {
-      $("totalIncome").textContent =
-        money(state.totalIncome);
-    }
-
-    if ($("balanceTotal")) {
-      $("balanceTotal").textContent =
-        money(state.totalIncome);
-    }
-
-    if ($("completedCount")) {
-      $("completedCount").textContent =
-        Number(state.completedCount || 0);
-    }
-  }
-
-  async function loadDashboard() {
-    if (!state.user || !state.session) {
-      return;
-    }
-
-    try {
-      const data =
-        await api("/api/me");
-
-      if (data.user) {
-        state.user = {
-          ...state.user,
-          ...data.user
-        };
-
-        saveUser(state.user);
-        updateProfileUI();
-      }
-    } catch (error) {
-      console.warn(
-        "ME API:",
-        error.message
-      );
-
-      if (
-        error.message === "Session expired"
-      ) {
-        await logout();
-        return;
-      }
-    }
-
-    try {
-      const data =
-        await api("/api/dashboard");
-
-      if (data.balance !== undefined) {
-        state.balance =
-          Number(data.balance || 0);
-      }
-
-      if (
-        data.todayEarnings !== undefined
-      ) {
-        state.todayIncome =
-          Number(data.todayEarnings || 0);
-      }
-
-      if (
-        data.totalEarnings !== undefined
-      ) {
-        state.totalIncome =
-          Number(data.totalEarnings || 0);
-      }
-
-      if (
-        data.completedCount !== undefined
-      ) {
-        state.completedCount =
-          Number(data.completedCount || 0);
-      }
-    } catch (error) {
-      console.warn(
-        "Dashboard API:",
-        error.message
-      );
-    }
-
-    await Promise.allSettled([
-      loadTasks(),
-      loadNotices(),
-      loadHistory()
-    ]);
-
-    renderAll();
-  }
-
-  async function loadTasks() {
-    try {
-      const data =
-        await api("/api/tasks");
-
-      if (Array.isArray(data)) {
-        state.tasks = data;
-      } else if (
-        Array.isArray(data.tasks)
-      ) {
-        state.tasks = data.tasks;
-      }
-
-      renderTasks();
-    } catch (error) {
-      console.warn(
-        "Tasks:",
-        error.message
-      );
-    }
-  }
-
-  async function loadNotices() {
-    try {
-      const data =
-        await api("/api/notices");
-
-      if (Array.isArray(data)) {
-        state.notices = data;
-      } else if (
-        Array.isArray(data.notices)
-      ) {
-        state.notices = data.notices;
-      }
-
-      renderNotices();
-    } catch (error) {
-      console.warn(
-        "Notices:",
-        error.message
-      );
-    }
-  }
-
-  async function loadHistory() {
-    try {
-      const data =
-        await api("/api/history");
-
-      if (Array.isArray(data)) {
-        state.history = data;
-      } else if (
-        Array.isArray(data.history)
-      ) {
-        state.history = data.history;
-      }
-
-      renderHistory();
-    } catch (error) {
-      console.warn(
-        "History:",
-        error.message
-      );
-    }
-  }
-
-  function renderAll() {
-    renderBalance();
-    renderTasks();
-    renderNotices();
-    renderHistory();
-  }
-
-  function renderTasks() {
-    const container =
-      $("taskList");
-
-    if (!container) return;
-
-    if (!state.tasks.length) {
-      container.innerHTML = `
-        <div class="empty-state">
-          এখন কোনো Task পাওয়া যায়নি।
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML =
-      state.tasks.map((task) => {
-        const id =
-          task.id ||
-          task._id ||
-          "";
-
-        const title =
-          task.title ||
-          task.name ||
-          "Task";
-
-        const description =
-          task.description ||
-          task.details ||
-          "এই Task সম্পন্ন করুন।";
-
-        const reward =
-          Number(
-            task.reward ??
-            task.amount ??
-            0
-          );
-
-        const completed =
-          task.completed === true ||
-          task.status === "completed";
-
-        const waiting =
-          task.available_at &&
-          new Date(task.available_at) >
-            new Date();
-
-        return `
-          <article class="task-card">
-
-            <div class="task-top">
-              <div>
-                <h3>
-                  ${escapeHTML(title)}
-                </h3>
-
-                <p>
-                  ${escapeHTML(
-                    description
-                  )}
-                </p>
-              </div>
-
-              <div class="task-reward">
-                ${money(reward)}
-              </div>
-            </div>
-
-            <div class="task-actions">
-
-              ${
-                completed
-                  ? `
-                    <button
-                      class="task-disabled"
-                      type="button"
-                      disabled
-                    >
-                      Completed
-                    </button>
-                  `
-                  : waiting
-                    ? `
-                      <button
-                        class="task-disabled"
-                        type="button"
-                        disabled
-                      >
-                        পরে আবার করুন
-                      </button>
-                    `
-                    : `
-                      <button
-                        class="task-start"
-                        type="button"
-                        data-task-id="${escapeHTML(
-                          id
-                        )}"
-                      >
-                        Start Task
-                      </button>
-                    `
-              }
-
-            </div>
-
-            <div class="task-status">
-
-              ${
-                completed
-                  ? `
-                    <span class="status-completed">
-                      ✓ Completed
-                    </span>
-                  `
-                  : waiting
-                    ? `
-                      এই Task এখনো available নয়।
-                    `
-                    : `
-                      Task শুরু করতে
-                      Start Task চাপুন।
-                    `
-              }
-
-            </div>
-
-          </article>
-        `;
-      }).join("");
-
-    container
-      .querySelectorAll(".task-start")
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            startTask(
-              button.dataset.taskId
-            );
-          }
-        );
-      });
-  }
-
-  function renderNotices() {
-    const list =
-      $("noticeList");
-
-    const homeNotice =
-      $("homeNotice");
-
-    if (homeNotice) {
-      if (state.notices.length) {
-        const latest =
-          state.notices[0];
-
-        homeNotice.textContent =
-          latest.message ||
-          latest.text ||
-          latest.title ||
-          "নতুন ঘোষণা দেখুন।";
-      } else {
-        homeNotice.textContent =
-          "নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে দেখা যাবে।";
-      }
-    }
-
-    if (!list) return;
-
-    if (!state.notices.length) {
-      list.innerHTML = `
-        <div class="empty-state">
-          বর্তমানে কোনো Notice নেই।
-        </div>
-      `;
-      return;
-    }
-
-    list.innerHTML =
-      state.notices.map(
-        (notice) => {
-          const title =
-            notice.title ||
-            "Notice";
-
-          const text =
-            notice.message ||
-            notice.text ||
-            notice.description ||
-            "";
-
-          const date =
-            notice.created_at ||
-            notice.createdAt;
-
-          return `
-            <article class="notice-item">
-
-              <h3>
-                ${escapeHTML(title)}
-              </h3>
-
-              <p>
-                ${escapeHTML(text)}
-              </p>
-
-              ${
-                date
-                  ? `
-                    <p>
-                      ${escapeHTML(
-                        formatDateTime(date)
-                      )}
-                    </p>
-                  `
-                  : ""
-              }
-
-            </article>
-          `;
-        }
-      ).join("");
-  }
-
-  function renderHistory() {
-    const list =
-      $("historyList");
-
-    if (!list) return;
-
-    if (!state.history.length) {
-      list.innerHTML = `
-        <div class="empty-state">
-          এখনো কোনো History নেই।
-        </div>
-      `;
-      return;
-    }
-
-    list.innerHTML =
-      state.history.map(
-        (item) => {
-          const type =
-            item.title ||
-            item.type ||
-            "Transaction";
-
-          const amount =
-            Number(
-              item.amount || 0
-            );
-
-          const status =
-            item.status ||
-            "Pending";
-
-          const date =
-            item.created_at ||
-            item.createdAt ||
-            item.date ||
-            item.updatedAt;
-
-          const statusLower =
-            String(status)
-              .toLowerCase();
-
-          const statusClass =
-            statusLower === "completed"
-              ? "status-completed"
-              : statusLower === "rejected"
-                ? "status-rejected"
-                : "status-pending";
-
-          return `
-            <article class="history-item">
-
-              <div>
-                <h4>
-                  ${escapeHTML(type)}
-                </h4>
-
-                <p>
-                  ${escapeHTML(
-                    date
-                      ? formatDateTime(date)
-                      : ""
-                  )}
-                </p>
-              </div>
-
-              <div>
-
-                <div class="history-amount">
-                  ${money(amount)}
-                </div>
-
-                <div
-                  class="history-status ${statusClass}"
-                >
-                  ${escapeHTML(status)}
-                </div>
-
-              </div>
-
-            </article>
-          `;
-        }
-      ).join("");
-  }
-
-  async function startTask(taskId) {
-    if (!state.user || !state.session) {
-      alert("আগে Login করুন।");
-      return;
-    }
-
-    const task =
-      state.tasks.find(
-        (item) =>
-          String(
-            item.id ||
-            item._id
-          ) === String(taskId)
-      );
-
-    if (!task) {
-      alert("Task পাওয়া যায়নি।");
-      return;
-    }
-
-    if (
-      task.completed === true ||
-      task.status === "completed"
-    ) {
-      return;
-    }
-
-    const id =
-      task.id ||
-      task._id;
-
-    try {
-      await api(
-        `/api/tasks/${encodeURIComponent(id)}/start`,
-        {
-          method: "POST"
-        }
-      );
-    } catch (error) {
-      alert(
-        error.message ||
-        "Task শুরু করা যায়নি।"
-      );
-      return;
-    }
-
-    state.activeTask = task;
-    state.taskStartedAt = Date.now();
-
-    $("taskModal")?.classList.remove(
-      "hidden"
-    );
-
-    if ($("modalTaskTitle")) {
-      $("modalTaskTitle").textContent =
-        task.title ||
-        task.name ||
-        "Task";
-    }
-
-    if ($("modalTaskInfo")) {
-      $("modalTaskInfo").textContent =
-        task.description ||
-        task.details ||
-        "Task processing হচ্ছে...";
-    }
-
-    if ($("modalStatus")) {
-      $("modalStatus").textContent =
-        "১০ সেকেন্ড অপেক্ষা করুন।";
-    }
-
-    $("verifyTaskBtn")?.classList.add(
-      "hidden"
-    );
-
-    $("cancelTaskBtn")?.classList.remove(
-      "hidden"
-    );
-
-    startHeartbeat();
-    startCountdown();
-  }
-
-  function startHeartbeat() {
-    stopHeartbeat();
-
-    state.heartbeatTimer =
-      setInterval(
-        async () => {
-          if (
-            !state.activeTask ||
-            !state.session
-          ) {
-            return;
-          }
-
-          const id =
-            state.activeTask.id ||
-            state.activeTask._id;
-
-          try {
-            await api(
-              `/api/tasks/${encodeURIComponent(
-                id
-              )}/heartbeat`,
-              {
-                method: "POST"
-              }
-            );
-          } catch (error) {
-            console.warn(
-              "Heartbeat:",
-              error.message
-            );
-          }
-        },
-        4000
-      );
-  }
-
-  function stopHeartbeat() {
-    if (state.heartbeatTimer) {
-      clearInterval(
-        state.heartbeatTimer
-      );
-
-      state.heartbeatTimer = null;
-    }
-  }
-
-  function startCountdown() {
-    stopTaskTimer();
-
-    const totalSeconds = 10;
-    let remaining = totalSeconds;
-
-    const countdown =
-      $("countdown");
-
-    const progress =
-      $("progressBar");
-
-    if (countdown) {
-      countdown.textContent =
-        remaining;
-    }
-
-    if (progress) {
-      progress.style.width =
-        "0%";
-    }
-
-    state.taskTimer =
-      setInterval(() => {
-        remaining -= 1;
-
-        if (countdown) {
-          countdown.textContent =
-            Math.max(
-              remaining,
-              0
-            );
-        }
-
-        if (progress) {
-          const completed =
-            (
-              (totalSeconds -
-                remaining) /
-              totalSeconds
-            ) * 100;
-
-          progress.style.width =
-            `${Math.min(
-              completed,
-              100
-            )}%`;
-        }
-
-        if (remaining <= 0) {
-          stopTaskTimer();
-
-          if ($("modalStatus")) {
-            $("modalStatus").textContent =
-              "Task Complete চাপলে Task submit হবে।";
-          }
-
-          $("verifyTaskBtn")?.classList.remove(
-            "hidden"
-          );
-
-          $("cancelTaskBtn")?.classList.add(
-            "hidden"
-          );
-        }
-      }, 1000);
-  }
-
-  function stopTaskTimer() {
-    if (state.taskTimer) {
-      clearInterval(
-        state.taskTimer
-      );
-
-      state.taskTimer = null;
-    }
-  }
-
-  async function closeTaskModal() {
-    stopTaskTimer();
-    stopHeartbeat();
-
-    if (
-      state.activeTask &&
-      state.session
-    ) {
-      const id =
-        state.activeTask.id ||
-        state.activeTask._id;
-
-      try {
-        await api(
-          `/api/tasks/${encodeURIComponent(
-            id
-          )}/cancel`,
-          {
-            method: "POST"
-          }
-        );
-      } catch (error) {
-        console.warn(
-          "Cancel:",
-          error.message
-        );
-      }
-    }
-
-    state.activeTask = null;
-    state.taskStartedAt = null;
-
-    $("taskModal")?.classList.add(
-      "hidden"
-    );
-  }
-
-  async function completeTask() {
-    if (
-      !state.activeTask ||
-      !state.user ||
-      !state.session
-    ) {
-      return;
-    }
-
-    const task =
-      state.activeTask;
-
-    const id =
-      task.id ||
-      task._id;
-
-    const button =
-      $("verifyTaskBtn");
-
-    if (button) {
-      button.disabled = true;
-    }
-
-    try {
-      const data =
-        await api(
-          `/api/tasks/${encodeURIComponent(
-            id
-          )}/complete`,
-          {
-            method: "POST"
-          }
-        );
-
-      if (data.user) {
-        state.user = {
-          ...state.user,
-          ...data.user
-        };
-
-        saveUser(state.user);
-        updateProfileUI();
-      }
-
-      if (
-        data.balance !== undefined
-      ) {
-        state.balance =
-          Number(
-            data.balance || 0
-          );
-      }
-
-      alert(
-        data.message ||
-        `Task সফলভাবে complete হয়েছে। Reward: ${money(
-          data.reward || task.reward
-        )}`
-      );
-
-      stopHeartbeat();
-
-      state.activeTask = null;
-      state.taskStartedAt = null;
-
-      $("taskModal")?.classList.add(
-        "hidden"
-      );
-
-      await loadDashboard();
-
-    } catch (error) {
-      alert(
-        error.message ||
-        "Task complete করা যায়নি।"
-      );
-    } finally {
-      if (button) {
-        button.disabled = false;
-      }
-    }
-  }
-
-  async function submitWithdrawal(event) {
-    event.preventDefault();
-
-    if (!state.user || !state.session) {
-      showMessage(
-        $("withdrawMessage"),
-        "আগে Login করুন।"
-      );
-      return;
-    }
-
-    const method =
-      $("withdrawMethod")?.value;
-
-    const number =
-      $("withdrawNumber")
-        ?.value
-        .trim();
-
-    const amount =
-      Number(
-        $("withdrawAmount")
-          ?.value || 0
-      );
-
-    if (!number) {
-      showMessage(
-        $("withdrawMessage"),
-        "Account Number দিন।"
-      );
-      return;
-    }
-
-    if (!/^01\d{9}$/.test(number)) {
-      showMessage(
-        $("withdrawMessage"),
-        "সঠিক ১১ সংখ্যার account number দিন।"
-      );
-      return;
-    }
-
-    if (amount < 200) {
-      showMessage(
-        $("withdrawMessage"),
-        "Minimum withdrawal ৳200।"
-      );
-      return;
-    }
-
-    if (amount > state.balance) {
-      showMessage(
-        $("withdrawMessage"),
-        "আপনার balance যথেষ্ট নয়।"
-      );
-      return;
-    }
-
-    const button =
-      event.target.querySelector(
-        'button[type="submit"]'
-      );
-
-    if (button) {
-      button.disabled = true;
-    }
-
-    showMessage(
-      $("withdrawMessage"),
-      "Withdrawal submit হচ্ছে...",
-      true
-    );
-
-    try {
-      const data =
-        await api(
-          "/api/withdrawals",
-          {
-            method: "POST",
-            body: {
-              method,
-              accountNumber: number,
-              amount
-            }
-          }
-        );
-
-      if (
-        data.balance !== undefined
-      ) {
-        state.balance =
-          Number(
-            data.balance || 0
-          );
-      }
-
-      if (
-        Array.isArray(data.history)
-      ) {
-        state.history =
-          data.history;
-      }
-
-      showMessage(
-        $("withdrawMessage"),
-        data.message ||
-        "Withdrawal request সফলভাবে submit হয়েছে।",
-        true
-      );
-
-      event.target.reset();
-
-      await loadDashboard();
-
-    } catch (error) {
-      showMessage(
-        $("withdrawMessage"),
-        error.message ||
-        "Withdrawal submit করা যায়নি।"
-      );
-    } finally {
-      if (button) {
-        button.disabled = false;
-      }
-    }
-  }
-
-  function setupAuthTabs() {
-    document
-      .querySelectorAll(".tab-btn")
-      .forEach((button) => {
-
-        button.addEventListener(
-          "click",
-          () => {
-
-            const type =
-              button.dataset.auth;
-
-            document
-              .querySelectorAll(
-                ".tab-btn"
-              )
-              .forEach((btn) => {
-                btn.classList.toggle(
-                  "active",
-                  btn === button
-                );
-              });
-
-            if (type === "login") {
-
-              $("loginForm")
-                ?.classList.remove(
-                  "hidden"
-                );
-
-              $("registerForm")
-                ?.classList.add(
-                  "hidden"
-                );
-
-            } else {
-
-              $("loginForm")
-                ?.classList.add(
-                  "hidden"
-                );
-
-              $("registerForm")
-                ?.classList.remove(
-                  "hidden"
-                );
-            }
-          }
-        );
-      });
-  }
-
-  async function handleLogin(event) {
-    event.preventDefault();
+  /* =========================================================
+     AUTH
+     ========================================================= */
+
+  async function register(event) {
+    event?.preventDefault();
 
     const name =
-      $("loginName")
-        ?.value
-        .trim();
+      $("registerName")?.value.trim() || "";
 
     const password =
-      $("loginPassword")
-        ?.value;
-
-    if (!name || !password) {
-      showMessage(
-        $("loginMessage"),
-        "Name/User ID এবং Password দিন।"
-      );
-      return;
-    }
-
-    const button =
-      event.target.querySelector(
-        'button[type="submit"]'
-      );
-
-    if (button) {
-      button.disabled = true;
-    }
-
-    showMessage(
-      $("loginMessage"),
-      "Login হচ্ছে...",
-      true
-    );
-
-    try {
-      const data =
-        await api(
-          "/api/login",
-          {
-            method: "POST",
-            body: {
-              name,
-              password
-            }
-          }
-        );
-
-      if (!data.user) {
-        throw new Error(
-          "Server থেকে user information পাওয়া যায়নি।"
-        );
-      }
-
-      if (!data.session) {
-        throw new Error(
-          "Server থেকে login session পাওয়া যায়নি।"
-        );
-      }
-
-      setLoggedIn(
-        data.user,
-        data.session
-      );
-
-      showMessage(
-        $("loginMessage"),
-        "Login successful।",
-        true
-      );
-
-    } catch (error) {
-      showMessage(
-        $("loginMessage"),
-        error.message ||
-        "Login failed।"
-      );
-    } finally {
-      if (button) {
-        button.disabled = false;
-      }
-    }
-  }
-
-  async function handleRegister(event) {
-    event.preventDefault();
-
-    const name =
-      $("registerName")
-        ?.value
-        .trim();
-
-    const password =
-      $("registerPassword")
-        ?.value;
+      $("registerPassword")?.value || "";
 
     const confirm =
-      $("registerConfirm")
-        ?.value;
+      $("registerConfirm")?.value || "";
 
-    if (!name || name.length < 2) {
+    const message = $("registerMessage");
+
+    if (!name) {
       showMessage(
-        $("registerMessage"),
-        "সঠিক নাম দিন।"
+        message,
+        "নাম লিখুন।",
+        "error"
       );
       return;
     }
 
-    if (
-      !password ||
-      password.length < 6
-    ) {
+    if (password.length < 4) {
       showMessage(
-        $("registerMessage"),
-        "Password কমপক্ষে 6 অক্ষরের হতে হবে।"
+        message,
+        "পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের দিন।",
+        "error"
       );
       return;
     }
 
     if (password !== confirm) {
       showMessage(
-        $("registerMessage"),
-        "দুইটি Password একই নয়।"
+        message,
+        "দুইটি পাসওয়ার্ড মিলছে না।",
+        "error"
       );
       return;
     }
 
-    const button =
-      event.target.querySelector(
-        'button[type="submit"]'
-      );
-
-    if (button) {
-      button.disabled = true;
-    }
-
-    showMessage(
-      $("registerMessage"),
-      "Registration হচ্ছে...",
-      true
-    );
-
     try {
-      const data =
-        await api(
-          "/api/register",
-          {
-            method: "POST",
-            body: {
-              name,
-              password
-            }
-          }
-        );
-
-      if (!data.user) {
-        throw new Error(
-          "Server থেকে user information পাওয়া যায়নি।"
-        );
-      }
-
-      if (!data.session) {
-        throw new Error(
-          "Server থেকে registration session পাওয়া যায়নি।"
-        );
-      }
-
-      setLoggedIn(
-        data.user,
-        data.session
+      showMessage(
+        message,
+        "Registration হচ্ছে...",
+        "warning"
       );
+
+      const data = await api("/api/register", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          password
+        })
+      });
+
+      saveAuth(data);
 
       showMessage(
-        $("registerMessage"),
-        "Registration successful।",
-        true
+        message,
+        "Registration সফল হয়েছে।",
+        "success"
       );
+
+      await openDashboard();
 
     } catch (error) {
+      console.error("Register error:", error);
+
       showMessage(
-        $("registerMessage"),
-        error.message ||
-        "Registration failed।"
+        message,
+        error.message || "Registration failed.",
+        "error"
       );
-    } finally {
-      if (button) {
-        button.disabled = false;
+    }
+  }
+
+  async function login(event) {
+    event?.preventDefault();
+
+    const name =
+      $("loginName")?.value.trim() || "";
+
+    const password =
+      $("loginPassword")?.value || "";
+
+    const message = $("loginMessage");
+
+    if (!name || !password) {
+      showMessage(
+        message,
+        "নাম এবং পাসওয়ার্ড দিন।",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      showMessage(
+        message,
+        "Login হচ্ছে...",
+        "warning"
+      );
+
+      const data = await api("/api/login", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          password
+        })
+      });
+
+      saveAuth(data);
+
+      showMessage(
+        message,
+        "Login সফল হয়েছে।",
+        "success"
+      );
+
+      await openDashboard();
+
+    } catch (error) {
+      console.error("Login error:", error);
+
+      showMessage(
+        message,
+        error.message || "Login failed.",
+        "error"
+      );
+    }
+  }
+
+  async function logout() {
+    try {
+      if (session) {
+        await api("/api/logout", {
+          method: "POST"
+        });
+      }
+    } catch (error) {
+      console.warn("Logout API error:", error);
+    }
+
+    stopTaskTimers();
+    clearAuth();
+    showAuthPage();
+  }
+
+  /* =========================================================
+     CURRENT USER
+     ========================================================= */
+
+  async function loadMe() {
+    if (!session) return null;
+
+    try {
+      const data = await api("/api/me");
+
+      me =
+        data.user ||
+        data.me ||
+        data ||
+        me;
+
+      saveUser();
+
+      return me;
+
+    } catch (error) {
+      console.warn("ME error:", error);
+
+      if (
+        error.status === 401 ||
+        error.status === 403
+      ) {
+        clearAuth();
+        showAuthPage();
+      }
+
+      return null;
+    }
+  }
+
+  /* =========================================================
+     DASHBOARD
+     ========================================================= */
+
+  async function refreshDashboard() {
+    if (!session) return;
+
+    try {
+      const data = await api("/api/dashboard");
+
+      if (data.user) {
+        me = {
+          ...me,
+          ...data.user
+        };
+      }
+
+      if (data.me) {
+        me = {
+          ...me,
+          ...data.me
+        };
+      }
+
+      if (data.balance !== undefined) {
+        me = {
+          ...me,
+          balance: data.balance
+        };
+      }
+
+      if (data.todayEarnings !== undefined) {
+        me = {
+          ...me,
+          todayEarnings: data.todayEarnings
+        };
+      }
+
+      if (data.totalEarnings !== undefined) {
+        me = {
+          ...me,
+          totalEarnings: data.totalEarnings
+        };
+      }
+
+      if (data.completedCount !== undefined) {
+        me = {
+          ...me,
+          completedCount: data.completedCount
+        };
+      }
+
+      saveUser();
+
+      renderUser();
+      renderDashboardStats(data);
+
+    } catch (error) {
+      console.error(
+        "Dashboard error:",
+        error
+      );
+
+      if (
+        error.status === 401 ||
+        error.status === 403
+      ) {
+        clearAuth();
+        showAuthPage();
       }
     }
   }
 
-  function setupNavigation() {
-    document
-      .querySelectorAll(".nav-btn")
-      .forEach((button) => {
+  function renderDashboardStats(data = {}) {
+    const balance =
+      data.balance ??
+      me?.balance ??
+      0;
 
+    const today =
+      data.todayEarnings ??
+      me?.todayEarnings ??
+      0;
+
+    const total =
+      data.totalEarnings ??
+      me?.totalEarnings ??
+      0;
+
+    const completed =
+      data.completedCount ??
+      me?.completedCount ??
+      0;
+
+    setText("homeBalance", money(balance));
+    setText("balanceToday", money(today));
+    setText("todayIncome", money(today));
+
+    setText("balanceTotal", money(total));
+    setText("totalIncome", money(total));
+
+    setText(
+      "completedCount",
+      String(completed)
+    );
+  }
+
+  function setText(id, value) {
+    const el = $(id);
+
+    if (el) {
+      el.textContent = value;
+    }
+  }
+
+  /* =========================================================
+     USER / PROFILE UI
+     ========================================================= */
+
+  function renderUser() {
+    if (!me) return;
+
+    const name =
+      me.name ||
+      me.username ||
+      "Masud JR";
+
+    const id =
+      me.id ??
+      me.user_id ??
+      me.userId ??
+      "-";
+
+    const joined =
+      me.created_at ||
+      me.createdAt ||
+      me.joined_at ||
+      me.joinedAt;
+
+    setText(
+      "headerUserName",
+      name
+    );
+
+    setText(
+      "profileName",
+      name
+    );
+
+    setText(
+      "profileId",
+      String(id)
+    );
+
+    setText(
+      "profileJoined",
+      dateText(joined)
+    );
+
+    const avatarIds = [
+      "authAvatar",
+      "userAvatar",
+      "profileAvatar"
+    ];
+
+    avatarIds.forEach((id) => {
+      const avatar = $(id);
+
+      if (!avatar) return;
+
+      // যদি HTML-এ img থাকে, তার ছবি নষ্ট করবে না।
+      if (
+        avatar.tagName === "IMG"
+      ) {
+        if (!avatar.getAttribute("src")) {
+          avatar.src = "profile.jpg";
+        }
+
+        avatar.alt = name;
+        return;
+      }
+
+      // পুরনো MJ text avatar হলে নামের প্রথম অক্ষর
+      // দেখাবে।
+      avatar.textContent =
+        name
+          .trim()
+          .charAt(0)
+          .toUpperCase() || "M";
+    });
+  }
+
+  function renderProfile() {
+    renderUser();
+
+    const balance =
+      me?.balance || 0;
+
+    const today =
+      me?.todayEarnings || 0;
+
+    const total =
+      me?.totalEarnings || 0;
+
+    const completed =
+      me?.completedCount || 0;
+
+    setText(
+      "profileBalance",
+      money(balance)
+    );
+
+    setText(
+      "profileToday",
+      money(today)
+    );
+
+    setText(
+      "profileTotal",
+      money(total)
+    );
+
+    setText(
+      "profileCompleted",
+      String(completed)
+    );
+  }
+
+  /* =========================================================
+     TASKS
+     ========================================================= */
+
+  async function loadTasks() {
+    if (!session) return;
+
+    try {
+      const data = await api("/api/tasks");
+
+      tasks =
+        Array.isArray(data)
+          ? data
+          : data.tasks || [];
+
+      renderTasks();
+
+    } catch (error) {
+      console.error(
+        "Tasks error:",
+        error
+      );
+
+      renderTaskError(
+        error.message ||
+        "Task load করা যায়নি।"
+      );
+    }
+  }
+
+  function renderTasks() {
+    const list = $("taskList");
+
+    if (!list) return;
+
+    if (!tasks.length) {
+      list.innerHTML = `
+        <div class="empty-state">
+          এখন কোনো task available নেই।
+        </div>
+      `;
+      return;
+    }
+
+    list.innerHTML = tasks
+      .map((task) => {
+        const id = task.id;
+
+        const title =
+          task.title ||
+          task.name ||
+          "Task";
+
+        const reward =
+          task.reward ??
+          task.amount ??
+          0;
+
+        const description =
+          task.description ||
+          task.details ||
+          "";
+
+        const availableAt =
+          task.available_at ||
+          task.availableAt;
+
+        return `
+          <div
+            class="task-card"
+            data-task-id="${esc(id)}"
+          >
+            <div class="task-card-content">
+              <h3>${esc(title)}</h3>
+
+              ${
+                description
+                  ? `<p>${esc(description)}</p>`
+                  : ""
+              }
+
+              <div class="task-meta">
+                <span>
+                  Reward: ${money(reward)}
+                </span>
+
+                ${
+                  availableAt
+                    ? `<span>
+                        Available:
+                        ${dateText(availableAt)}
+                      </span>`
+                    : ""
+                }
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="task-start-btn"
+              data-start-task="${esc(id)}"
+            >
+              Start Task
+            </button>
+          </div>
+        `;
+      })
+      .join("");
+
+    list
+      .querySelectorAll(
+        "[data-start-task]"
+      )
+      .forEach((button) => {
         button.addEventListener(
           "click",
           () => {
-            showSection(
-              button.dataset.section
+            const id =
+              Number(
+                button.dataset.startTask
+              );
+
+            startTask(id);
+          }
+        );
+      });
+  }
+
+  function renderTaskError(message) {
+    const list = $("taskList");
+
+    if (!list) return;
+
+    list.innerHTML = `
+      <div class="empty-state error">
+        ${esc(message)}
+      </div>
+    `;
+  }
+
+  /* =========================================================
+     TASK MODAL
+     ========================================================= */
+
+  function findTask(id) {
+    return tasks.find(
+      (task) =>
+        Number(task.id) === Number(id)
+    );
+  }
+
+  async function startTask(id) {
+    const task = findTask(id);
+
+    if (!task) {
+      alert("Task পাওয়া যায়নি।");
+      return;
+    }
+
+    if (activeTaskId) {
+      alert(
+        "একটি task বর্তমানে চলছে।"
+      );
+      return;
+    }
+
+    try {
+      await api(
+        `/api/tasks/${id}/start`,
+        {
+          method: "POST"
+        }
+      );
+
+      activeTaskId = id;
+      activeTask = task;
+      taskStartedAt = Date.now();
+
+      openTaskModal(task);
+
+      startTaskTimers();
+
+    } catch (error) {
+      console.error(
+        "Start task error:",
+        error
+      );
+
+      alert(
+        error.message ||
+        "Task start করা যায়নি।"
+      );
+    }
+  }
+
+  function openTaskModal(task) {
+    const modal = $("taskModal");
+
+    if (!modal) {
+      // Modal HTML না থাকলেও task চালু থাকবে।
+      return;
+    }
+
+    setText(
+      "modalTaskTitle",
+      task.title ||
+      task.name ||
+      "Task"
+    );
+
+    const reward =
+      task.reward ??
+      task.amount ??
+      0;
+
+    const description =
+      task.description ||
+      task.details ||
+      "Task complete করুন।";
+
+    const info = $("modalTaskInfo");
+
+    if (info) {
+      info.innerHTML = `
+        <p>${esc(description)}</p>
+        <p>
+          <strong>Reward:</strong>
+          ${money(reward)}
+        </p>
+      `;
+    }
+
+    setText(
+      "modalStatus",
+      "Task চলছে..."
+    );
+
+    setText(
+      "countdown",
+      String(TASK_DURATION)
+    );
+
+    const progress = $("progressBar");
+
+    if (progress) {
+      progress.style.width = "0%";
+    }
+
+    const verify =
+      $("verifyTaskBtn");
+
+    if (verify) {
+      verify.disabled = true;
+      verify.style.display = "";
+    }
+
+    const cancel =
+      $("cancelTaskBtn");
+
+    if (cancel) {
+      cancel.disabled = false;
+    }
+
+    modal.classList.add("active");
+
+    modal.style.display = "";
+  }
+
+  function closeTaskModal() {
+    const modal = $("taskModal");
+
+    if (!modal) return;
+
+    modal.classList.remove("active");
+
+    modal.style.display = "none";
+  }
+
+  /* =========================================================
+     TASK TIMER + HEARTBEAT
+     ========================================================= */
+
+  function startTaskTimers() {
+    stopTaskTimers(false);
+
+    let remaining = TASK_DURATION;
+
+    updateCountdown(remaining);
+
+    // Backend heartbeat প্রতি 4 সেকেন্ডে
+    heartbeatTimer = setInterval(
+      async () => {
+        if (!activeTaskId) return;
+
+        try {
+          await api(
+            `/api/tasks/${activeTaskId}/heartbeat`,
+            {
+              method: "POST"
+            }
+          );
+        } catch (error) {
+          console.warn(
+            "Heartbeat failed:",
+            error
+          );
+        }
+      },
+      4000
+    );
+
+    taskTimer = setInterval(
+      async () => {
+        const elapsed =
+          Math.floor(
+            (Date.now() -
+              taskStartedAt) /
+              1000
+          );
+
+        remaining =
+          Math.max(
+            0,
+            TASK_DURATION -
+              elapsed
+          );
+
+        updateCountdown(
+          remaining
+        );
+
+        updateProgress(
+          elapsed
+        );
+
+        if (
+          elapsed >=
+          TASK_DURATION
+        ) {
+          clearInterval(taskTimer);
+          taskTimer = null;
+
+          await finishTask();
+        }
+      },
+      250
+    );
+  }
+
+  function updateCountdown(seconds) {
+    setText(
+      "countdown",
+      String(
+        Math.max(
+          0,
+          seconds
+        )
+      )
+    );
+
+    const status =
+      $("modalStatus");
+
+    if (
+      status &&
+      activeTaskId
+    ) {
+      if (seconds > 0) {
+        status.textContent =
+          `Please wait ${seconds}s...`;
+      } else {
+        status.textContent =
+          "Task complete হচ্ছে...";
+      }
+    }
+  }
+
+  function updateProgress(elapsed) {
+    const progress =
+      $("progressBar");
+
+    if (!progress) return;
+
+    const percent =
+      Math.min(
+        100,
+        (elapsed /
+          TASK_DURATION) *
+          100
+      );
+
+    progress.style.width =
+      `${percent}%`;
+  }
+
+  function stopTaskTimers(reset = true) {
+    if (taskTimer) {
+      clearInterval(taskTimer);
+      taskTimer = null;
+    }
+
+    if (heartbeatTimer) {
+      clearInterval(
+        heartbeatTimer
+      );
+      heartbeatTimer = null;
+    }
+
+    if (reset) {
+      activeTaskId = null;
+      activeTask = null;
+      taskStartedAt = 0;
+    }
+  }
+
+  async function finishTask() {
+    if (!activeTaskId) return;
+
+    const id = activeTaskId;
+
+    const verify =
+      $("verifyTaskBtn");
+
+    if (verify) {
+      verify.disabled = true;
+    }
+
+    const status =
+      $("modalStatus");
+
+    if (status) {
+      status.textContent =
+        "Reward processing...";
+    }
+
+    try {
+      await api(
+        `/api/tasks/${id}/complete`,
+        {
+          method: "POST"
+        }
+      );
+
+      stopTaskTimers();
+
+      if (status) {
+        status.textContent =
+          "Task completed successfully!";
+      }
+
+      if (verify) {
+        verify.style.display = "none";
+      }
+
+      // Balance immediately update
+      await refreshAll();
+
+      // ছোট delay দিয়ে modal বন্ধ
+      setTimeout(
+        () => {
+          closeTaskModal();
+        },
+        1000
+      );
+
+    } catch (error) {
+      console.error(
+        "Complete task error:",
+        error
+      );
+
+      stopTaskTimers();
+
+      if (status) {
+        status.textContent =
+          error.message ||
+          "Task complete হয়নি।";
+      }
+
+      if (verify) {
+        verify.disabled = false;
+      }
+    }
+  }
+
+  async function cancelTask() {
+    if (!activeTaskId) {
+      closeTaskModal();
+      return;
+    }
+
+    const id = activeTaskId;
+
+    stopTaskTimers();
+
+    try {
+      await api(
+        `/api/tasks/${id}/cancel`,
+        {
+          method: "POST"
+        }
+      );
+    } catch (error) {
+      console.warn(
+        "Cancel task error:",
+        error
+      );
+    }
+
+    closeTaskModal();
+
+    activeTaskId = null;
+    activeTask = null;
+
+    await loadTasks();
+  }
+
+  /* =========================================================
+     HISTORY
+     ========================================================= */
+
+  async function loadHistory() {
+    if (!session) return;
+
+    try {
+      const data =
+        await api("/api/history");
+
+      const history =
+        Array.isArray(data)
+          ? data
+          : data.history || [];
+
+      renderHistory(history);
+
+    } catch (error) {
+      console.error(
+        "History error:",
+        error
+      );
+
+      const list =
+        $("historyList");
+
+      if (list) {
+        list.innerHTML = `
+          <div class="empty-state error">
+            ${esc(
+              error.message ||
+              "History load করা যায়নি।"
+            )}
+          </div>
+        `;
+      }
+    }
+  }
+
+  function renderHistory(history) {
+    const list =
+      $("historyList");
+
+    if (!list) return;
+
+    if (!history.length) {
+      list.innerHTML = `
+        <div class="empty-state">
+          এখনো কোনো earning history নেই।
+        </div>
+      `;
+      return;
+    }
+
+    list.innerHTML = history
+      .map((item) => {
+        const amount =
+          item.amount ??
+          item.reward ??
+          item.earning ??
+          0;
+
+        const title =
+          item.title ||
+          item.task_title ||
+          item.taskName ||
+          "Task";
+
+        const created =
+          item.created_at ||
+          item.createdAt;
+
+        return `
+          <div class="history-item">
+            <div>
+              <strong>
+                ${esc(title)}
+              </strong>
+
+              <small>
+                ${dateText(created)}
+                ${timeText(created)}
+              </small>
+            </div>
+
+            <strong>
+              +${money(amount)}
+            </strong>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  /* =========================================================
+     NOTICES
+     ========================================================= */
+
+  async function loadNotices() {
+    if (!session) return;
+
+    try {
+      const data =
+        await api("/api/notices");
+
+      notices =
+        Array.isArray(data)
+          ? data
+          : data.notices || [];
+
+      renderNotices();
+
+    } catch (error) {
+      console.error(
+        "Notices error:",
+        error
+      );
+    }
+  }
+
+  function renderNotices() {
+    const list =
+      $("noticeList");
+
+    if (list) {
+      if (!notices.length) {
+        list.innerHTML = `
+          <div class="empty-state">
+            কোনো notice নেই।
+          </div>
+        `;
+      } else {
+        list.innerHTML =
+          notices
+            .map((notice) => {
+              const title =
+                notice.title ||
+                "Notice";
+
+              const body =
+                notice.message ||
+                notice.body ||
+                notice.content ||
+                "";
+
+              const created =
+                notice.created_at ||
+                notice.createdAt;
+
+              return `
+                <div class="notice-item">
+                  <h4>
+                    ${esc(title)}
+                  </h4>
+
+                  <p>
+                    ${esc(body)}
+                  </p>
+
+                  ${
+                    created
+                      ? `<small>
+                          ${dateText(created)}
+                        </small>`
+                      : ""
+                  }
+                </div>
+              `;
+            })
+            .join("");
+      }
+    }
+
+    // Home notice
+    const homeNotice =
+      $("homeNotice");
+
+    if (homeNotice) {
+      const latest =
+        notices[0];
+
+      if (!latest) {
+        homeNotice.innerHTML =
+          "কোনো নতুন notice নেই।";
+      } else {
+        homeNotice.innerHTML = `
+          <strong>
+            ${esc(
+              latest.title ||
+              "Notice"
+            )}
+          </strong>
+
+          <div>
+            ${esc(
+              latest.message ||
+              latest.body ||
+              latest.content ||
+              ""
+            )}
+          </div>
+        `;
+      }
+    }
+  }
+
+  /* =========================================================
+     WITHDRAW
+     ========================================================= */
+
+  async function submitWithdrawal(
+    event
+  ) {
+    event?.preventDefault();
+
+    const method =
+      $("withdrawMethod")?.value ||
+      "";
+
+    const number =
+      $("withdrawNumber")?.value.trim() ||
+      "";
+
+    const amountValue =
+      $("withdrawAmount")?.value ||
+      "";
+
+    const amount =
+      Number(amountValue);
+
+    const message =
+      $("withdrawMessage");
+
+    if (!method) {
+      showMessage(
+        message,
+        "Withdraw method নির্বাচন করুন।",
+        "error"
+      );
+      return;
+    }
+
+    if (!number) {
+      showMessage(
+        message,
+        "Account number দিন।",
+        "error"
+      );
+      return;
+    }
+
+    if (
+      !amount ||
+      amount <= 0
+    ) {
+      showMessage(
+        message,
+        "সঠিক amount দিন।",
+        "error"
+      );
+      return;
+    }
+
+    try {
+      showMessage(
+        message,
+        "Withdrawal request পাঠানো হচ্ছে...",
+        "warning"
+      );
+
+      await api(
+        "/api/withdrawals",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            method,
+            number,
+            amount
+          })
+        }
+      );
+
+      showMessage(
+        message,
+        "Withdrawal request সফল হয়েছে।",
+        "success"
+      );
+
+      if ($("withdrawAmount")) {
+        $("withdrawAmount").value = "";
+      }
+
+      await refreshDashboard();
+
+    } catch (error) {
+      console.error(
+        "Withdrawal error:",
+        error
+      );
+
+      showMessage(
+        message,
+        error.message ||
+        "Withdrawal request failed.",
+        "error"
+      );
+    }
+  }
+
+  /* =========================================================
+     FEE STATUS
+     ========================================================= */
+
+  async function loadFeeStatus() {
+    if (!session) return null;
+
+    try {
+      return await api(
+        "/api/fee-status"
+      );
+    } catch (error) {
+      console.warn(
+        "Fee status error:",
+        error
+      );
+
+      return null;
+    }
+  }
+
+  /* =========================================================
+     SUPPORT
+     ========================================================= */
+
+  function openWhatsApp() {
+    const number =
+      "8801961504587";
+
+    const url =
+      `https://wa.me/${number}`;
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  function openMessenger() {
+    window.open(
+      "https://m.me/masud.11.jr",
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  /* =========================================================
+     FULL REFRESH
+     ========================================================= */
+
+  async function refreshAll() {
+    if (!session) return;
+
+    await Promise.allSettled([
+      refreshDashboard(),
+      loadTasks(),
+      loadHistory(),
+      loadNotices()
+    ]);
+
+    renderUser();
+  }
+
+  async function openDashboard() {
+    showDashboard();
+
+    await loadMe();
+
+    if (!session) {
+      showAuthPage();
+      return;
+    }
+
+    renderUser();
+
+    await refreshAll();
+
+    openSection("home");
+  }
+
+  /* =========================================================
+     EVENT BINDINGS
+     ========================================================= */
+
+  function bindEvents() {
+    // Login form
+    const loginForm =
+      $("loginForm");
+
+    if (loginForm) {
+      loginForm.addEventListener(
+        "submit",
+        login
+      );
+    }
+
+    // Register form
+    const registerForm =
+      $("registerForm");
+
+    if (registerForm) {
+      registerForm.addEventListener(
+        "submit",
+        register
+      );
+    }
+
+    // Logout buttons
+    document
+      .querySelectorAll(
+        "[data-action='logout'], #logoutBtn"
+      )
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          logout
+        );
+      });
+
+    // Navigation
+    document
+      .querySelectorAll("[data-nav]")
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          () => {
+            openSection(
+              button.dataset.nav
             );
           }
         );
       });
 
-    $("homeTaskBtn")?.addEventListener(
-      "click",
-      () => showSection("tasks")
-    );
-  }
+    // Common nav IDs
+    const navMap = {
+      homeBtn: "home",
+      homeNav: "home",
+      tasksBtn: "tasks",
+      tasksNav: "tasks",
+      historyBtn: "history",
+      historyNav: "history",
+      profileBtn: "profile",
+      profileNav: "profile"
+    };
 
-  function setupButtons() {
-    $("headerLogout")
-      ?.addEventListener(
-        "click",
-        logout
+    Object.entries(navMap)
+      .forEach(
+        ([id, section]) => {
+          const button = $(id);
+
+          if (!button) return;
+
+          button.addEventListener(
+            "click",
+            () => {
+              openSection(section);
+            }
+          );
+        }
       );
 
-    $("profileLogout")
-      ?.addEventListener(
-        "click",
-        logout
-      );
+    // Profile support
+    document
+      .querySelectorAll(
+        "[data-support='whatsapp'], #whatsappSupport"
+      )
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          openWhatsApp
+        );
+      });
 
-    $("withdrawBtn")
-      ?.addEventListener(
-        "click",
-        () => showSection("withdraw")
-      );
+    document
+      .querySelectorAll(
+        "[data-support='messenger'], #messengerSupport"
+      )
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          openMessenger
+        );
+      });
 
-    $("withdrawForm")
-      ?.addEventListener(
-        "submit",
-        submitWithdrawal
-      );
+    // Task modal close
+    const close =
+      $("closeTaskModal");
 
-    $("closeTaskModal")
-      ?.addEventListener(
+    if (close) {
+      close.addEventListener(
         "click",
         closeTaskModal
       );
+    }
 
-    $("cancelTaskBtn")
-      ?.addEventListener(
+    // Cancel task
+    const cancel =
+      $("cancelTaskBtn");
+
+    if (cancel) {
+      cancel.addEventListener(
         "click",
-        closeTaskModal
+        cancelTask
       );
+    }
 
-    $("verifyTaskBtn")
-      ?.addEventListener(
+    // Verify task button
+    const verify =
+      $("verifyTaskBtn");
+
+    if (verify) {
+      verify.addEventListener(
         "click",
-        completeTask
+        () => {
+          finishTask();
+        }
       );
+    }
 
-    $("taskModal")
-      ?.addEventListener(
+    // Modal backdrop click
+    const modal =
+      $("taskModal");
+
+    if (modal) {
+      modal.addEventListener(
         "click",
         (event) => {
           if (
-            event.target ===
-            $("taskModal")
+            event.target === modal &&
+            !activeTaskId
           ) {
             closeTaskModal();
           }
         }
       );
-  }
+    }
 
-  async function init() {
-    setupAuthTabs();
-    setupNavigation();
-    setupButtons();
+    // Withdraw form
+    const withdrawForm =
+      $("withdrawForm");
 
-    $("loginForm")
-      ?.addEventListener(
+    if (withdrawForm) {
+      withdrawForm.addEventListener(
         "submit",
-        handleLogin
+        submitWithdrawal
       );
+    }
 
-    $("registerForm")
-      ?.addEventListener(
-        "submit",
-        handleRegister
-      );
-
-    state.session =
-      loadSession();
-
-    const savedUser =
-      loadSavedUser();
+    // Withdraw button
+    const withdrawBtn =
+      $("withdrawBtn");
 
     if (
-      state.session &&
-      savedUser
+      withdrawBtn &&
+      !withdrawForm
     ) {
-      state.user =
-        savedUser;
+      withdrawBtn.addEventListener(
+        "click",
+        () => {
+          const form =
+            $("withdrawForm");
 
-      $("authPage")
-        ?.classList.add(
-          "hidden"
-        );
-
-      $("dashboard")
-        ?.classList.remove(
-          "hidden"
-        );
-
-      updateProfileUI();
-
-      await loadDashboard();
-
-    } else {
-      clearSession();
-      clearSavedUser();
-
-      $("dashboard")
-        ?.classList.add(
-          "hidden"
-        );
-
-      $("authPage")
-        ?.classList.remove(
-          "hidden"
-        );
+          if (form) {
+            form.scrollIntoView({
+              behavior: "smooth"
+            });
+          }
+        }
+      );
     }
+
+    // Any generic logout text buttons
+    document
+      .querySelectorAll(
+        ".logout-btn"
+      )
+      .forEach((button) => {
+        button.addEventListener(
+          "click",
+          logout
+        );
+      });
   }
 
-  document.addEventListener(
-    "DOMContentLoaded",
-    init
-  );
+  /* =========================================================
+     STARTUP
+     ========================================================= */
+
+  async function init() {
+    bindEvents();
+
+    const savedUser =
+      getSavedUser();
+
+    if (savedUser) {
+      me = savedUser;
+    }
+
+    // Session না থাকলে login/register page
+    if (!session) {
+      showAuthPage();
+      return;
+    }
+
+    // Session আছে → user verify
+    const currentUser =
+      await loadMe();
+
+    if (!currentUser) {
+      clearAuth();
+      showAuthPage();
+      return;
+    }
+
+    await openDashboard();
+  }
+
+  // DOM ready
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+    document.addEventListener(
+      "DOMContentLoaded",
+      init
+    );
+  } else {
+    init();
+  }
 
 })();
