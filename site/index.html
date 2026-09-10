@@ -178,154 +178,562 @@
     </section>
 
 
-    <!-- ================= DASHBOARD ================= -->
-    <section id="dashboard" class="dashboard hidden">
+   <!-- ================= DASHBOARD ================= -->
+<section id="dashboard" class="dashboard hidden">
 
-      <!-- TOP BAR -->
-      <header class="topbar">
+  <!-- ================= HOME ================= -->
+  <main class="page-wrap">
 
-        <div class="profile-mini">
+    <section id="section-home" class="page-section active-section">
+
+      <div class="mj-home-hero">
+
+        <button
+          id="supportTrigger"
+          class="mj-support-trigger"
+          type="button"
+        >
+          🎧 <span class="support-label">Support Team</span> ›
+        </button>
+
+        <div class="mj-hero-content">
 
           <img
-            class="avatar"
-            id="userAvatar"
+            class="mj-hero-avatar"
             src="profile.jpg"
-            alt="Masud JR"
+            alt="Masud JR Official"
           >
 
-          <div>
-            <div class="eyebrow">
-              স্বাগতম
-            </div>
+          <h1 class="mj-hero-title">
+            Masud JR Official
+            <span class="mj-verified">✓</span>
+          </h1>
 
-            <strong id="headerUserName">
-              User
-            </strong>
+          <p class="mj-hero-tagline">
+            প্রতিদিন টাকা কমপ্লিট করলেই সাথে সাথে পাচ্ছেন টাকা! এখানে অসংখ্য টাস্ক রয়েছে 💐
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================= HOME STATS ================= -->
+
+      <div class="stats-grid">
+
+        <div class="stat-card">
+          <span>আজকের আয়</span>
+          <strong id="todayIncome">৳0</strong>
+        </div>
+
+        <div class="stat-card">
+          <span>মোট আয়</span>
+          <strong id="totalIncome">৳0</strong>
+        </div>
+
+        <div class="stat-card">
+          <span>Completed</span>
+          <strong id="completedCount">0</strong>
+        </div>
+
+      </div>
+
+
+      <!-- ================= TASK BUTTON ================= -->
+
+      <button
+        id="homeTaskBtn"
+        class="wide-action"
+        type="button"
+      >
+        🚚 Trucks / Tasks
+      </button>
+
+
+      <!-- ================= NOTICE ================= -->
+
+      <div class="notice-card compact">
+
+        <h3>📢 Notice</h3>
+
+        <div id="homeNotice">
+          নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে দেখা যাবে।
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ================= TASKS ================= -->
+
+    <section id="section-tasks" class="page-section">
+
+      <div class="section-head">
+
+        <div>
+          <h2>🚚 Trucks / Tasks</h2>
+          <p>সব কাজ এক জায়গায়</p>
+        </div>
+
+      </div>
+
+      <div
+        id="taskList"
+        class="task-list"
+      ></div>
+
+    </section>
+
+
+    <!-- ================= BALANCE ================= -->
+
+    <section id="section-balance" class="page-section">
+
+      <div class="balance-card">
+
+        <span>বর্তমান ব্যালেন্স</span>
+
+        <strong id="balanceAmount">
+          ৳0
+        </strong>
+
+        <div class="balance-subgrid">
+
+          <div>
+            <small>আজকের আয়</small>
+            <b id="balanceToday">৳0</b>
+          </div>
+
+          <div>
+            <small>মোট আয়</small>
+            <b id="balanceTotal">৳0</b>
           </div>
 
         </div>
 
+
         <button
-          id="headerLogout"
-          class="icon-btn"
+          id="withdrawBtn"
+          class="withdraw-btn"
           type="button"
-          aria-label="Logout"
         >
-          ↪
+          Withdraw
         </button>
 
-      </header>
+      </div>
 
 
-      <main class="page-wrap">
+      <!-- পুরোনো Processing Fee box hidden থাকবে -->
 
-        <!-- ================= HOME ================= -->
-        <section
-          id="section-home"
-          class="page-section active-section"
+      <div
+        id="feeBox"
+        class="fee-box hidden"
+      >
+      </div>
+
+    </section>
+
+
+    <!-- ================= HISTORY ================= -->
+
+    <section id="section-history" class="page-section">
+
+      <div class="section-head">
+
+        <div>
+          <h2>📜 History</h2>
+          <p>আপনার কাজ ও Withdrawal হিসাব</p>
+        </div>
+
+      </div>
+
+      <div
+        id="historyList"
+        class="history-list"
+      ></div>
+
+    </section>
+
+
+    <!-- ================= PROFILE ================= -->
+
+    <section id="section-profile" class="page-section">
+
+      <div class="profile-card-large">
+
+        <button
+          id="profileClose"
+          class="mj-profile-close"
+          type="button"
+          aria-label="Close profile"
         >
+          ×
+        </button>
 
-          <div class="hero-card">
+
+        <div class="mj-profile-cover">
+
+          <div class="mj-profile-main">
+
+            <img
+              class="mj-profile-avatar"
+              id="profileAvatar"
+              src="profile.jpg"
+              alt="Profile"
+            >
 
             <div>
 
-              <span class="pill">
-                Masud JR Official
-              </span>
-
-              <h2>
-                কাজ করুন, হিসাব দেখুন
+              <h2 id="profileName">
+                User
               </h2>
 
-              <p>
-                আপনার Task, Balance ও Withdrawal এক জায়গায়।
-              </p>
+              <div
+                class="mj-user-id"
+                id="profileId"
+              >
+                -
+              </div>
 
-            </div>
-
-            <div class="hero-balance">
-
-              <small>
-                মোট ব্যালেন্স
-              </small>
-
-              <strong id="homeBalance">
-                ৳0
-              </strong>
+              <div class="mj-verified-line">
+                👑 Verified User
+              </div>
 
             </div>
 
           </div>
 
-
-          <div class="stats-grid">
-
-            <div class="stat-card">
-
-              <span>
-                আজকের আয়
-              </span>
-
-              <strong id="todayIncome">
-                ৳0
-              </strong>
-
-            </div>
+        </div>
 
 
-            <div class="stat-card">
+        <!-- PROFILE STATS -->
 
-              <span>
-                মোট আয়
-              </span>
+        <div class="mj-profile-stats">
 
-              <strong id="totalIncome">
-                ৳0
-              </strong>
-
-            </div>
-
-
-            <div class="stat-card">
-
-              <span>
-                Completed
-              </span>
-
-              <strong id="completedCount">
-                0
-              </strong>
-
-            </div>
-
+          <div>
+            <small>Balance</small>
+            <strong id="profileBalance">৳0</strong>
           </div>
 
+          <div>
+            <small>Completed</small>
+            <strong id="profileCompleted">0</strong>
+          </div>
+
+          <div>
+            <small>Total Income</small>
+            <strong id="profileIncome">৳0</strong>
+          </div>
+
+        </div>
+
+
+        <!-- PROFILE INFORMATION -->
+
+        <div class="mj-profile-info">
+
+          <div class="mj-profile-info-row">
+            <span>User ID</span>
+            <strong id="profileIdCopy">-</strong>
+          </div>
+
+          <div class="mj-profile-info-row">
+            <span>Joined</span>
+            <strong id="profileJoined">-</strong>
+          </div>
+
+          <div class="mj-profile-info-row">
+            <span>Status</span>
+            <strong>🟢 Active</strong>
+          </div>
+
+        </div>
+
+
+        <!-- PROFILE ACTIONS -->
+
+        <div class="mj-profile-actions">
 
           <button
-            id="homeTaskBtn"
-            class="wide-action"
+            id="profileSupportBtn"
+            class="mj-profile-action"
             type="button"
           >
-            🚚 Trucks / Tasks
+            🎧 Support Team
           </button>
 
+          <button
+            id="profileLogout"
+            class="mj-profile-action logout"
+            type="button"
+          >
+            🚪 Logout
+          </button>
 
-          <div class="notice-card compact">
+        </div>
 
-            <h3>
-              📢 Notice
-            </h3>
+      </div>
 
-            <div id="homeNotice">
-              নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে দেখা যাবে।
-            </div>
-
-          </div>
-
-        </section>
+    </section>
 
 
-        <!-- ================= TASKS ================= -->
+    <!-- ================= NOTICE ================= -->
+
+    <section id="section-notice" class="page-section">
+
+      <div class="section-head">
+
+        <div>
+          <h2>📢 Notice</h2>
+          <p>নতুন task ও গুরুত্বপূর্ণ ঘোষণা</p>
+        </div>
+
+      </div>
+
+      <div
+        id="noticeList"
+        class="notice-list"
+      ></div>
+
+    </section>
+
+
+    <!-- ================= SERVICE ================= -->
+
+    <section id="section-service" class="page-section">
+
+      <div class="section-head">
+
+        <div>
+          <h2>💬 Customer Service</h2>
+          <p>যোগাযোগের জন্য</p>
+        </div>
+
+      </div>
+
+
+      <a
+        class="contact-card"
+        href="https://m.me/masud.11.jr"
+        target="_blank"
+        rel="noopener"
+      >
+        💬 Messenger
+      </a>
+
+
+      <a
+        class="contact-card whatsapp"
+        href="https://wa.me/8801961504587"
+        target="_blank"
+        rel="noopener"
+      >
+        📱 WhatsApp: 01961504587
+      </a>
+
+    </section>
+
+
+    <!-- ================= WITHDRAW ================= -->
+
+    <section id="section-withdraw" class="page-section">
+
+      <div class="section-head">
+
+        <div>
+          <h2>💸 Withdraw</h2>
+          <p>Minimum withdrawal ৳200</p>
+        </div>
+
+      </div>
+
+
+      <form
+        id="withdrawForm"
+        class="withdraw-form"
+      >
+
+        <label for="withdrawMethod">
+          Payment Method
+        </label>
+
+        <select id="withdrawMethod">
+
+          <option value="bKash">bKash</option>
+          <option value="Nagad">Nagad</option>
+          <option value="Rocket">Rocket</option>
+
+        </select>
+
+
+        <label for="withdrawNumber">
+          Account Number
+        </label>
+
+        <input
+          id="withdrawNumber"
+          placeholder="01XXXXXXXXX"
+          inputmode="numeric"
+          required
+        >
+
+
+        <label for="withdrawAmount">
+          Amount
+        </label>
+
+        <input
+          id="withdrawAmount"
+          type="number"
+          min="200"
+          step="1"
+          placeholder="200"
+          required
+        >
+
+
+        <div class="fee-note">
+          Withdrawal request Admin review করার পর payment করা হবে।
+        </div>
+
+
+        <button
+          class="primary-btn"
+          type="submit"
+        >
+          Submit Withdrawal
+        </button>
+
+
+        <p
+          id="withdrawMessage"
+          class="form-message"
+        ></p>
+
+      </form>
+
+    </section>
+
+  </main>
+
+
+  <!-- ================= BOTTOM NAV ================= -->
+
+  <nav class="bottom-nav">
+
+    <button
+      data-section="home"
+      class="nav-btn active"
+      type="button"
+    >
+      ⌂
+      <span>Home</span>
+    </button>
+
+
+    <button
+      data-section="tasks"
+      class="nav-btn"
+      type="button"
+    >
+      🚚
+      <span>Tasks</span>
+    </button>
+
+
+    <button
+      data-section="balance"
+      class="nav-btn"
+      type="button"
+    >
+      ৳
+      <span>Balance</span>
+    </button>
+
+
+    <button
+      data-section="history"
+      class="nav-btn"
+      type="button"
+    >
+      ☷
+      <span>History</span>
+    </button>
+
+
+    <button
+      data-section="profile"
+      class="nav-btn"
+      type="button"
+    >
+      ◉
+      <span>Profile</span>
+    </button>
+
+  </nav>
+
+
+  <!-- ================= SUPPORT OVERLAY ================= -->
+
+  <div
+    id="supportOverlay"
+    class="mj-overlay"
+    aria-hidden="true"
+  >
+
+    <div class="mj-support-panel">
+
+      <div class="mj-panel-head">
+
+        <h3 id="supportTitle">
+          🎧 Support Team
+        </h3>
+
+        <button
+          id="supportClose"
+          class="mj-close"
+          type="button"
+          aria-label="Close"
+        >
+          ×
+        </button>
+
+      </div>
+
+
+      <div class="mj-panel-body">
+
+        <p>
+          যেকোনো সমস্যায় আমাদের সাথে যোগাযোগ করুন
+        </p>
+
+
+        <button
+          class="mj-support-option whatsapp"
+          data-support="whatsapp"
+          type="button"
+        >
+          WhatsApp 01961504587
+        </button>
+
+
+        <button
+          class="mj-support-option messenger"
+          data-support="messenger"
+          type="button"
+        >
+          Facebook Messenger
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</section>
         <section
           id="section-tasks"
           class="page-section"
