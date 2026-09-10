@@ -304,7 +304,7 @@
 
       if (!overlay) return;
 
-      overlay.classList.add("active");
+      overlay.classList.add("open");
       overlay.setAttribute("aria-hidden", "false");
     }
 
