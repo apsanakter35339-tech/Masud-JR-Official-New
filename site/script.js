@@ -7,84 +7,113 @@
      Login + Registration + Dashboard + Tasks + Balance
      ========================================================= */
 
-  const RENDER_API =
-    "https://masud-jr-official-online.onrender.com";
+  const RENDER_API = "https://masud-jr-official-online.onrender.com";
 
-  // Netlify হলে Render API ব্যবহার করবে।
-  // Render-এর নিজের domain হলে same-origin ব্যবহার করবে।
-  const API_BASE =
-    location.hostname.endsWith(".onrender.com")
-      ? ""
-      : RENDER_API;
+  // Render frontend হলে same-origin API ব্যবহার করবে।
+  // Netlify হলে Render backend ব্যবহার করবে।
+  const API_BASE = location.hostname.endsWith(".onrender.com")
+    ? ""
+    : RENDER_API;
 
-  const USER_SESSION_KEY = "mjrUserSessionV2";
+  const SESSION_KEY = "mjrUserSessionV2";
   const USER_KEY = "mjrUserV2";
 
-  let session =
-    localStorage.getItem(USER_SESSION_KEY) || "";
-
+  let session = localStorage.getItem(SESSION_KEY) || "";
   let me = null;
+
   let tasks = [];
+  let notices = [];
+  let history = [];
+
+  let balance = 0;
+  let todayIncome = 0;
+  let totalIncome = 0;
+  let completedCount = 0;
 
   let activeTaskId = null;
   let activeTask = null;
-
   let taskTimer = null;
   let heartbeatTimer = null;
-
-  let taskStartedAt = 0;
+  let taskStartedAt = null;
 
   const $ = (id) => document.getElementById(id);
 
   /* =========================================================
-     BASIC HELPERS
+     HELPERS
      ========================================================= */
 
-  function safeText(value) {
-    return value == null ? "" : String(value);
+  function money(value) {
+    const number = Number(value || 0);
+
+    return `৳${number.toLocaleString("en-BD")}`;
   }
 
-  function money(value) {
-    const n = Number(value || 0);
+  function escapeHTML(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
 
-    return "৳" + n.toLocaleString("en-US", {
-      maximumFractionDigits: 2
+  function formatDate(value) {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    return date.toLocaleDateString("bn-BD", {
+      year: "numeric",
+      month: "long",
+      day: "numeric"
     });
   }
 
-  function saveUser() {
-    if (me) {
-      localStorage.setItem(
-        USER_KEY,
-        JSON.stringify(me)
-      );
+  function formatDateTime(value) {
+    if (!value) return "-";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
     }
+
+    return date.toLocaleString("bn-BD", {
+      dateStyle: "medium",
+      timeStyle: "short"
+    });
   }
 
-  function clearUser() {
-    me = null;
-    session = "";
+  function showMessage(element, message, success = false) {
+    if (!element) return;
 
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(USER_SESSION_KEY);
+    element.textContent = message || "";
+    element.style.color = success ? "#16a34a" : "#dc2626";
+  }
+
+  function saveUser(user) {
+    if (!user) return;
+
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
   }
 
   function loadSavedUser() {
     try {
-      const raw =
-        localStorage.getItem(USER_KEY);
+      const saved = localStorage.getItem(USER_KEY);
 
-      if (raw) {
-        me = JSON.parse(raw);
-      }
-    } catch (error) {
-      me = null;
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
     }
+  }
 
-    if (!session) {
-      me = null;
-      localStorage.removeItem(USER_KEY);
-    }
+  function clearSavedUser() {
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(SESSION_KEY);
   }
 
   /* =========================================================
@@ -97,20 +126,41 @@
       ...(options.headers || {})
     };
 
+    // খুব গুরুত্বপূর্ণ:
+    // authenticated API request-এ x-user-session পাঠানো হচ্ছে।
     if (session) {
       headers["x-user-session"] = session;
     }
 
-    const response = await fetch(
-      `${API_BASE}${path}`,
-      {
-        ...options,
-        headers
-      }
-    );
+    const config = {
+      method: options.method || "GET",
+      headers
+    };
 
-    const data =
-      await response.json().catch(() => ({}));
+    if (options.body !== undefined) {
+      config.body =
+        typeof options.body === "string"
+          ? options.body
+          : JSON.stringify(options.body);
+    }
+
+    let response;
+
+    try {
+      response = await fetch(`${API_BASE}${path}`, config);
+    } catch (error) {
+      throw new Error(
+        "Server-এর সাথে সংযোগ করা যাচ্ছে না। Internet connection অথবা Render server check করুন।"
+      );
+    }
+
+    let data = {};
+
+    try {
+      data = await response.json();
+    } catch {
+      data = {};
+    }
 
     if (!response.ok) {
       const error = new Error(
@@ -129,73 +179,46 @@
   }
 
   /* =========================================================
-     MESSAGE
+     AUTH TABS
      ========================================================= */
 
-  function showMessage(elementId, message, type = "error") {
-    const el = $(elementId);
+  function forceAuthFormVisibility() {
+    const loginForm = $("loginForm");
+    const registerForm = $("registerForm");
 
-    if (!el) return;
+    if (loginForm) {
+      loginForm.style.setProperty("display", "block", "important");
+    }
 
-    el.textContent = message || "";
-
-    el.style.display =
-      message ? "block" : "none";
-
-    if (type === "success") {
-      el.style.color = "#16a34a";
-    } else {
-      el.style.color = "#dc2626";
+    if (registerForm) {
+      registerForm.style.setProperty("display", "none", "important");
     }
   }
-
-  /* =========================================================
-     AUTH PAGE
-     ========================================================= */
-
-  function showAuthPage() {
-    const auth = $("authPage");
-    const dashboard = $("dashboard");
-
-    if (auth) {
-      auth.style.display = "";
-    }
-
-    if (dashboard) {
-      dashboard.style.display = "none";
-    }
-  }
-
-  function showDashboardPage() {
-    const auth = $("authPage");
-    const dashboard = $("dashboard");
-
-    if (auth) {
-      auth.style.display = "none";
-    }
-
-    if (dashboard) {
-      dashboard.style.display = "";
-    }
-  }
-
-  /* =========================================================
-     LOGIN / REGISTRATION TABS
-     ========================================================= */
 
   function activateLoginTab() {
     const loginForm = $("loginForm");
     const registerForm = $("registerForm");
 
     if (loginForm) {
-      loginForm.style.display = "";
+      loginForm.classList.remove("hidden");
+      loginForm.style.setProperty("display", "block", "important");
     }
 
     if (registerForm) {
-      registerForm.style.display = "none";
+      registerForm.classList.add("hidden");
+      registerForm.style.setProperty("display", "none", "important");
     }
 
-    styleAuthTabs("login");
+    document.querySelectorAll(".tab-btn").forEach((button) => {
+      const type = button.dataset.auth;
+
+      button.classList.toggle(
+        "active",
+        type === "login"
+      );
+    });
+
+    clearMessages();
   }
 
   function activateRegisterTab() {
@@ -203,108 +226,66 @@
     const registerForm = $("registerForm");
 
     if (loginForm) {
-      loginForm.style.display = "none";
+      loginForm.classList.add("hidden");
+      loginForm.style.setProperty("display", "none", "important");
     }
 
     if (registerForm) {
-      registerForm.style.display = "";
+      registerForm.classList.remove("hidden");
+      registerForm.style.setProperty("display", "block", "important");
     }
 
-    styleAuthTabs("register");
+    document.querySelectorAll(".tab-btn").forEach((button) => {
+      const type = button.dataset.auth;
+
+      button.classList.toggle(
+        "active",
+        type === "register"
+      );
+    });
+
+    clearMessages();
   }
 
-  function styleAuthTabs(active) {
-    const buttons =
-      document.querySelectorAll(
-        "[data-auth-tab]"
-      );
+  function clearMessages() {
+    if ($("loginMessage")) {
+      $("loginMessage").textContent = "";
+    }
 
-    buttons.forEach((button) => {
-      const tab =
-        button.dataset.authTab;
-
-      if (tab === active) {
-        button.style.background =
-          "linear-gradient(135deg,#2563eb,#4f46e5)";
-
-        button.style.color = "#fff";
-        button.style.border = "2px solid #2563eb";
-        button.style.boxShadow =
-          "0 8px 20px rgba(37,99,235,.25)";
-      } else {
-        button.style.background =
-          "#eef2f7";
-
-        button.style.color =
-          "#64748b";
-
-        button.style.border =
-          "2px solid transparent";
-
-        button.style.boxShadow =
-          "none";
-      }
-    });
+    if ($("registerMessage")) {
+      $("registerMessage").textContent = "";
+    }
   }
 
   function setupAuthTabs() {
-    // যদি HTML-এ data-auth-tab থাকে
-    document
-      .querySelectorAll("[data-auth-tab]")
-      .forEach((button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            const tab =
-              button.dataset.authTab;
+    const buttons = document.querySelectorAll(
+      '[data-auth], [data-auth-tab], .auth-tab, .tab-btn'
+    );
 
-            if (tab === "login") {
-              activateLoginTab();
-            }
+    buttons.forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
 
-            if (tab === "register") {
-              activateRegisterTab();
-            }
-          }
-        );
+        const type =
+          button.dataset.auth ||
+          button.dataset.authTab ||
+          button.dataset.tab ||
+          button.textContent
+            .trim()
+            .toLowerCase();
+
+        if (
+          String(type).toLowerCase().includes("register") ||
+          String(type).toLowerCase().includes("registration")
+        ) {
+          activateRegisterTab();
+        } else {
+          activateLoginTab();
+        }
       });
+    });
 
-    // Existing buttons-এর text থেকেও tab detect করবে
-    const authPage = $("authPage");
-
-    if (authPage) {
-      authPage
-        .querySelectorAll("button, .tab, .auth-tab, [role='button']")
-        .forEach((element) => {
-          const text =
-            safeText(element.textContent)
-              .trim()
-              .toLowerCase();
-
-          if (
-            text === "login" ||
-            text === "লগইন"
-          ) {
-            element.addEventListener(
-              "click",
-              activateLoginTab
-            );
-          }
-
-          if (
-            text === "registration" ||
-            text === "register" ||
-            text === "রেজিস্ট্রেশন"
-          ) {
-            element.addEventListener(
-              "click",
-              activateRegisterTab
-            );
-          }
-        });
-    }
-
-    activateLoginTab();
+    forceAuthFormVisibility();
   }
 
   /* =========================================================
@@ -312,75 +293,89 @@
      ========================================================= */
 
   async function handleLogin(event) {
-    if (event) {
-      event.preventDefault();
-    }
+    event.preventDefault();
 
-    const name =
-      $("loginName")?.value.trim() || "";
+    const name = $("loginName")?.value.trim() || "";
+    const password = $("loginPassword")?.value || "";
 
-    const password =
-      $("loginPassword")?.value || "";
-
-    if (!name || !password) {
+    if (!name) {
       showMessage(
-        "loginMessage",
-        "নাম/User ID এবং Password দিন।"
+        $("loginMessage"),
+        "নাম / User ID দিন।"
       );
       return;
     }
 
+    if (!password) {
+      showMessage(
+        $("loginMessage"),
+        "Password দিন।"
+      );
+      return;
+    }
+
+    const button = event.target.querySelector(
+      'button[type="submit"]'
+    );
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Login হচ্ছে...";
+    }
+
     showMessage(
-      "loginMessage",
+      $("loginMessage"),
       "Login হচ্ছে...",
-      "success"
+      true
     );
 
     try {
-      const data = await api(
-        "/api/login",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name,
-            password
-          })
+      /*
+       * সঠিক backend endpoint:
+       * POST /api/login
+       */
+      const data = await api("/api/login", {
+        method: "POST",
+        body: {
+          name,
+          password
         }
-      );
+      });
 
-      session = data.session || "";
-
-      me = data.user || null;
-
-      if (!session) {
+      if (!data.session || !data.user) {
         throw new Error(
-          "Server session দেয়নি। আবার চেষ্টা করুন।"
+          "Server থেকে login information পাওয়া যায়নি।"
         );
       }
 
+      session = data.session;
+      me = data.user;
+
       localStorage.setItem(
-        USER_SESSION_KEY,
+        SESSION_KEY,
         session
       );
 
-      saveUser();
+      saveUser(me);
 
       showMessage(
-        "loginMessage",
-        "Login সফল হয়েছে।",
-        "success"
+        $("loginMessage"),
+        "Login successful।",
+        true
       );
 
-      await openDashboard();
+      openDashboard();
 
     } catch (error) {
-      console.error("LOGIN ERROR:", error);
-
       showMessage(
-        "loginMessage",
-        error.message ||
-          "Login করা যায়নি।"
+        $("loginMessage"),
+        error.message || "Login failed।"
       );
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Login";
+      }
     }
   }
 
@@ -388,10 +383,8 @@
      REGISTRATION
      ========================================================= */
 
-  async function handleRegistration(event) {
-    if (event) {
-      event.preventDefault();
-    }
+  async function handleRegister(event) {
+    event.preventDefault();
 
     const name =
       $("registerName")?.value.trim() || "";
@@ -402,394 +395,303 @@
     const confirm =
       $("registerConfirm")?.value || "";
 
-    if (!name) {
+    /*
+     * Backend-এর requirement:
+     * name >= 2
+     * password >= 6
+     */
+
+    if (!name || name.length < 2) {
       showMessage(
-        "registerMessage",
-        "আপনার নাম/User ID দিন।"
+        $("registerMessage"),
+        "নাম কমপক্ষে ২ অক্ষরের হতে হবে।"
       );
       return;
     }
 
-    if (!password) {
+    if (!password || password.length < 6) {
       showMessage(
-        "registerMessage",
-        "Password দিন।"
-      );
-      return;
-    }
-
-    if (password.length < 4) {
-      showMessage(
-        "registerMessage",
-        "Password কমপক্ষে ৪ অক্ষরের দিন।"
+        $("registerMessage"),
+        "Password কমপক্ষে ৬ অক্ষরের হতে হবে।"
       );
       return;
     }
 
     if (password !== confirm) {
       showMessage(
-        "registerMessage",
-        "Password এবং Confirm Password মিলছে না।"
+        $("registerMessage"),
+        "দুইটি Password একই নয়।"
       );
       return;
     }
 
+    const button = event.target.querySelector(
+      'button[type="submit"]'
+    );
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Registration হচ্ছে...";
+    }
+
     showMessage(
-      "registerMessage",
+      $("registerMessage"),
       "Registration হচ্ছে...",
-      "success"
+      true
     );
 
     try {
-      const data = await api(
-        "/api/register",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name,
-            password
-          })
+      /*
+       * সবচেয়ে গুরুত্বপূর্ণ FIX:
+       *
+       * ভুল:
+       * /api/auth/register
+       *
+       * সঠিক:
+       * /api/register
+       */
+      const data = await api("/api/register", {
+        method: "POST",
+        body: {
+          name,
+          password
         }
-      );
+      });
 
-      session = data.session || "";
-
-      me = data.user || null;
-
-      if (!session) {
+      if (!data.session || !data.user) {
         throw new Error(
-          "Registration হয়েছে কিন্তু session পাওয়া যায়নি।"
+          "Registration হয়েছে, কিন্তু server session দেয়নি।"
         );
       }
 
+      // Session save
+      session = data.session;
+
       localStorage.setItem(
-        USER_SESSION_KEY,
+        SESSION_KEY,
         session
       );
 
-      saveUser();
-
-      showMessage(
-        "registerMessage",
-        "Registration সফল হয়েছে।",
-        "success"
-      );
-
-      // Registration-এর পর সরাসরি dashboard
-      await openDashboard();
-
-    } catch (error) {
-      console.error(
-        "REGISTRATION ERROR:",
-        error
-      );
-
-      showMessage(
-        "registerMessage",
-        error.message ||
-          "Registration করা যায়নি।"
-      );
-    }
-  }
-
-  /* =========================================================
-     LOGOUT
-     ========================================================= */
-
-  async function logout() {
-    try {
-      if (session) {
-        await api(
-          "/api/logout",
-          {
-            method: "POST"
-          }
-        ).catch(() => {});
-      }
-    } finally {
-      stopTaskTimers();
-
-      clearUser();
-
-      closeTaskModal();
-      closeProfileModal();
-      closeSupportModal();
-
-      showAuthPage();
-
-      activateLoginTab();
-
-      if ($("loginMessage")) {
-        $("loginMessage").textContent = "";
-      }
-
-      if ($("registerMessage")) {
-        $("registerMessage").textContent = "";
-      }
-    }
-  }
-
-  /* =========================================================
-     CURRENT USER
-     ========================================================= */
-
-  async function loadMe() {
-    if (!session) {
-      return null;
-    }
-
-    try {
-      const data =
-        await api("/api/me");
-
-      me =
-        data.user ||
-        data.me ||
-        data ||
-        me;
-
-      saveUser();
-
-      return me;
-
-    } catch (error) {
-      if (
-        error.status === 401 ||
-        error.status === 403
-      ) {
-        clearUser();
-        showAuthPage();
-      }
-
-      return null;
-    }
-  }
-
-  /* =========================================================
-     DASHBOARD
-     ========================================================= */
-
-  async function loadDashboard() {
-    const data =
-      await api("/api/dashboard");
-
-    if (data.user) {
+      // User save
       me = data.user;
-    }
 
-    // Backend-এর dashboard data
-    if (data.balance != null) {
-      me = {
-        ...(me || {}),
-        balance: data.balance
-      };
-    }
+      saveUser(me);
 
-    if (data.todayEarnings != null) {
-      me = {
-        ...(me || {}),
-        todayEarnings:
-          data.todayEarnings
-      };
-    }
+      showMessage(
+        $("registerMessage"),
+        "Registration successful! Dashboard খুলছে...",
+        true
+      );
 
-    if (data.totalEarnings != null) {
-      me = {
-        ...(me || {}),
-        totalEarnings:
-          data.totalEarnings
-      };
-    }
+      // ছোট delay যাতে success message দেখা যায়
+      setTimeout(() => {
+        openDashboard();
+      }, 400);
 
-    if (data.completedCount != null) {
-      me = {
-        ...(me || {}),
-        completedCount:
-          data.completedCount
-      };
-    }
+    } catch (error) {
+      console.error("Registration error:", error);
 
-    saveUser();
-
-    updateDashboardUI(data);
-
-    return data;
-  }
-
-  function updateDashboardUI(data = {}) {
-    const balance =
-      data.balance ??
-      me?.balance ??
-      0;
-
-    const today =
-      data.todayEarnings ??
-      me?.todayEarnings ??
-      0;
-
-    const total =
-      data.totalEarnings ??
-      me?.totalEarnings ??
-      0;
-
-    const completed =
-      data.completedCount ??
-      me?.completedCount ??
-      0;
-
-    // Home balance
-    setText(
-      "homeBalance",
-      money(balance)
-    );
-
-    // Today income
-    setText(
-      "todayIncome",
-      money(today)
-    );
-
-    setText(
-      "balanceToday",
-      money(today)
-    );
-
-    // Total income
-    setText(
-      "totalIncome",
-      money(total)
-    );
-
-    setText(
-      "balanceTotal",
-      money(total)
-    );
-
-    // Completed
-    setText(
-      "completedCount",
-      completed
-    );
-
-    // Header / profile
-    updateUserUI();
-  }
-
-  function setText(id, value) {
-    const el = $(id);
-
-    if (el) {
-      el.textContent = safeText(value);
+      showMessage(
+        $("registerMessage"),
+        error.message || "Registration failed।"
+      );
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Registration";
+      }
     }
   }
 
   /* =========================================================
-     USER UI
+     DASHBOARD OPEN / CLOSE
      ========================================================= */
 
-  function updateUserUI() {
+  function openDashboard() {
+    $("authPage")?.classList.add("hidden");
+    $("dashboard")?.classList.remove("hidden");
+
+    updateProfileUI();
+
+    showSection("home");
+
+    refreshAll();
+  }
+
+  function openAuth() {
+    stopTaskTimer();
+
+    $("dashboard")?.classList.add("hidden");
+    $("authPage")?.classList.remove("hidden");
+
+    activateLoginTab();
+  }
+
+  /* =========================================================
+     PROFILE UI
+     ========================================================= */
+
+  function updateProfileUI() {
     if (!me) return;
 
     const name =
       me.name ||
       me.username ||
-      me.userId ||
       "User";
 
-    const userId =
+    const id =
       me.id ||
-      me.user_id ||
-      me.username ||
-      name;
-
-    setText(
-      "headerUserName",
-      name
-    );
-
-    setText(
-      "profileName",
-      name
-    );
-
-    setText(
-      "profileId",
-      userId
-    );
+      me.userId ||
+      "-";
 
     const joined =
       me.created_at ||
       me.createdAt ||
-      me.joined ||
-      "";
+      null;
 
-    if (joined) {
-      setText(
-        "profileJoined",
-        formatDate(joined)
+    if ($("headerUserName")) {
+      $("headerUserName").textContent = name;
+    }
+
+    if ($("profileName")) {
+      $("profileName").textContent = name;
+    }
+
+    if ($("profileId")) {
+      $("profileId").textContent = id;
+    }
+
+    if ($("profileJoined")) {
+      $("profileJoined").textContent =
+        formatDate(joined);
+    }
+
+    /*
+     * যদি HTML-এ image থাকে তাহলে image রাখবে।
+     * MJ text দিয়ে image replace করবে না।
+     */
+    document.querySelectorAll(
+      "#authAvatar, #userAvatar, #profileAvatar"
+    ).forEach((avatar) => {
+      if (avatar.tagName === "IMG") {
+        avatar.src = avatar.getAttribute("src") || "profile.jpg";
+        avatar.alt = name;
+      }
+    });
+  }
+
+  /* =========================================================
+     NAVIGATION
+     ========================================================= */
+
+  function showSection(sectionName) {
+    document.querySelectorAll(
+      ".page-section"
+    ).forEach((section) => {
+      section.classList.remove(
+        "active-section"
+      );
+    });
+
+    const target =
+      document.querySelector(
+        `#section-${sectionName}`
+      );
+
+    if (target) {
+      target.classList.add(
+        "active-section"
       );
     }
 
-    // Avatar যদি image হয়, src নষ্ট করবে না।
-    document
-      .querySelectorAll(
-        "#authAvatar,#userAvatar,#profileAvatar"
-      )
-      .forEach((avatar) => {
-        if (avatar.tagName === "IMG") {
-          if (
-            !avatar.getAttribute("src")
-          ) {
-            avatar.src = "profile.jpg";
+    document.querySelectorAll(
+      ".nav-btn"
+    ).forEach((button) => {
+      const section =
+        button.dataset.section ||
+        button.dataset.nav;
+
+      button.classList.toggle(
+        "active",
+        section === sectionName
+      );
+    });
+
+    if (sectionName === "balance") {
+      renderBalance();
+    }
+
+    if (sectionName === "history") {
+      renderHistory();
+    }
+
+    if (sectionName === "tasks") {
+      renderTasks();
+    }
+  }
+
+  function setupNavigation() {
+    document.querySelectorAll(
+      ".nav-btn"
+    ).forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          const section =
+            button.dataset.section ||
+            button.dataset.nav;
+
+          if (section) {
+            showSection(section);
           }
-
-          avatar.alt = name;
-        } else {
-          avatar.textContent =
-            getInitials(name);
         }
-      });
-  }
+      );
+    });
 
-  function getInitials(name) {
-    const parts =
-      safeText(name)
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-
-    if (!parts.length) {
-      return "MJ";
-    }
-
-    return parts
-      .slice(0, 2)
-      .map((p) => p[0])
-      .join("")
-      .toUpperCase();
-  }
-
-  function formatDate(value) {
-    const date =
-      new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-      return safeText(value);
-    }
-
-    return date.toLocaleDateString(
-      "en-GB",
-      {
-        day: "numeric",
-        month: "short",
-        year: "numeric"
-      }
+    $("homeTaskBtn")?.addEventListener(
+      "click",
+      () => showSection("tasks")
     );
   }
 
   /* =========================================================
-     TASKS
+     DASHBOARD DATA
      ========================================================= */
+
+  async function loadMe() {
+    const data = await api("/api/me");
+
+    if (data.user) {
+      me = data.user;
+
+      saveUser(me);
+
+      updateProfileUI();
+    }
+
+    return data;
+  }
+
+  async function loadDashboard() {
+    const data =
+      await api("/api/dashboard");
+
+    balance =
+      Number(data.balance || 0);
+
+    todayIncome =
+      Number(data.todayEarnings || 0);
+
+    totalIncome =
+      Number(data.totalEarnings || 0);
+
+    completedCount =
+      Number(data.completedCount || 0);
+
+    renderBalance();
+
+    return data;
+  }
 
   async function loadTasks() {
     const data =
@@ -798,157 +700,297 @@
     tasks =
       Array.isArray(data)
         ? data
-        : (
-            data.tasks ||
-            data.data ||
-            []
-          );
+        : Array.isArray(data.tasks)
+          ? data.tasks
+          : [];
 
     renderTasks();
 
     return tasks;
   }
 
+  async function loadNotices() {
+    try {
+      const data =
+        await api("/api/notices");
+
+      notices =
+        Array.isArray(data)
+          ? data
+          : Array.isArray(data.notices)
+            ? data.notices
+            : [];
+
+      renderNotices();
+
+    } catch (error) {
+      console.warn(
+        "Notice loading failed:",
+        error.message
+      );
+    }
+  }
+
+  async function loadHistory() {
+    try {
+      /*
+       * সঠিক endpoint:
+       * /api/history
+       *
+       * /api/history/:id নয়
+       */
+      const data =
+        await api("/api/history");
+
+      history =
+        Array.isArray(data)
+          ? data
+          : Array.isArray(data.history)
+            ? data.history
+            : [];
+
+      renderHistory();
+
+    } catch (error) {
+      console.warn(
+        "History loading failed:",
+        error.message
+      );
+    }
+  }
+
+  async function refreshAll() {
+    if (!session) return;
+
+    try {
+      await loadMe();
+    } catch (error) {
+      if (
+        error.status === 401
+      ) {
+        forceLogout();
+        return;
+      }
+    }
+
+    await Promise.allSettled([
+      loadDashboard(),
+      loadTasks(),
+      loadNotices(),
+      loadHistory()
+    ]);
+
+    renderBalance();
+    renderTasks();
+    renderNotices();
+    renderHistory();
+  }
+
+  /* =========================================================
+     BALANCE
+     ========================================================= */
+
+  function renderBalance() {
+    const balanceValue =
+      money(balance);
+
+    if ($("homeBalance")) {
+      $("homeBalance").textContent =
+        balanceValue;
+    }
+
+    if ($("balanceToday")) {
+      $("balanceToday").textContent =
+        money(todayIncome);
+    }
+
+    if ($("balanceTotal")) {
+      $("balanceTotal").textContent =
+        money(totalIncome);
+    }
+
+    if ($("todayIncome")) {
+      $("todayIncome").textContent =
+        money(todayIncome);
+    }
+
+    if ($("totalIncome")) {
+      $("totalIncome").textContent =
+        money(totalIncome);
+    }
+
+    if ($("completedCount")) {
+      $("completedCount").textContent =
+        completedCount;
+    }
+  }
+
+  /* =========================================================
+     TASKS
+     ========================================================= */
+
+  function getTaskAvailability(task) {
+    if (!task) return null;
+
+    return (
+      task.available_at ||
+      task.availableAt ||
+      null
+    );
+  }
+
+  function isTaskCooldown(task) {
+    const available =
+      getTaskAvailability(task);
+
+    if (!available) return false;
+
+    const time =
+      new Date(available).getTime();
+
+    return (
+      !Number.isNaN(time) &&
+      time > Date.now()
+    );
+  }
+
   function renderTasks() {
-    const list =
+    const container =
       $("taskList");
 
-    if (!list) return;
+    if (!container) return;
 
     if (!tasks.length) {
-      list.innerHTML = `
-        <div style="
-          padding:20px;
-          text-align:center;
-          color:#64748b;
-        ">
-          এখন কোনো নতুন Task নেই।
+      container.innerHTML = `
+        <div class="empty-state">
+          এখন কোনো Task পাওয়া যায়নি।
         </div>
       `;
 
       return;
     }
 
-    list.innerHTML = "";
+    container.innerHTML =
+      tasks.map((task) => {
+        const id =
+          task.id ||
+          task._id ||
+          "";
 
-    tasks.forEach((task) => {
-      const id =
-        task.id ??
-        task.task_id;
+        const title =
+          task.title ||
+          task.name ||
+          "Task";
 
-      const title =
-        task.title ||
-        task.name ||
-        "Task";
+        const description =
+          task.description ||
+          task.details ||
+          "এই Task সম্পন্ন করুন।";
 
-      const reward =
-        task.reward ??
-        task.amount ??
-        0;
+        const reward =
+          Number(
+            task.reward ??
+            task.amount ??
+            0
+          );
 
-      const available =
-        task.available_at ||
-        "";
+        const cooldown =
+          isTaskCooldown(task);
 
-      const item =
-        document.createElement("div");
+        return `
+          <article class="task-card">
 
-      item.className =
-        "task-card";
+            <div class="task-top">
 
-      item.style.cssText = `
-        background:#fff;
-        border-radius:18px;
-        padding:18px;
-        margin:12px 0;
-        box-shadow:0 5px 18px rgba(15,23,42,.08);
-        border:1px solid #e5e7eb;
-      `;
+              <div>
+                <h3>
+                  ${escapeHTML(title)}
+                </h3>
 
-      item.innerHTML = `
-        <div style="
-          display:flex;
-          justify-content:space-between;
-          gap:12px;
-          align-items:center;
-        ">
-          <div>
-            <div style="
-              font-size:18px;
-              font-weight:700;
-              color:#12345b;
-            ">
-              ${escapeHTML(title)}
+                <p>
+                  ${escapeHTML(description)}
+                </p>
+              </div>
+
+              <div class="task-reward">
+                ${money(reward)}
+              </div>
+
             </div>
 
-            <div style="
-              margin-top:6px;
-              color:#64748b;
-            ">
-              Reward: <b>${money(reward)}</b>
+            <div class="task-actions">
+
+              ${
+                cooldown
+                  ? `
+                    <button
+                      class="task-disabled"
+                      type="button"
+                      disabled
+                    >
+                      5 ঘণ্টা Cooldown
+                    </button>
+                  `
+                  : `
+                    <button
+                      class="task-start"
+                      type="button"
+                      data-task-id="${escapeHTML(id)}"
+                    >
+                      Start Task
+                    </button>
+                  `
+              }
+
             </div>
 
-            ${
-              available
-                ? `
-                  <div style="
-                    margin-top:5px;
-                    color:#64748b;
-                    font-size:13px;
-                  ">
-                    Available: ${escapeHTML(
-                      formatDateTime(available)
+            <div class="task-status">
+
+              ${
+                cooldown
+                  ? `
+                    আবার করা যাবে:
+                    ${formatDateTime(
+                      getTaskAvailability(task)
                     )}
-                  </div>
-                `
-                : ""
-            }
-          </div>
+                  `
+                  : `
+                    Task শুরু করতে
+                    Start Task চাপুন।
+                  `
+              }
 
-          <button
-            type="button"
-            class="task-start-button"
-            data-task-id="${escapeHTML(id)}"
-            style="
-              border:0;
-              border-radius:12px;
-              padding:11px 18px;
-              background:linear-gradient(135deg,#2563eb,#4f46e5);
-              color:#fff;
-              font-weight:700;
-              cursor:pointer;
-            "
-          >
-            Start
-          </button>
-        </div>
-      `;
+            </div>
 
-      list.appendChild(item);
-    });
+          </article>
+        `;
+      }).join("");
 
-    list
+    container
       .querySelectorAll(
-        ".task-start-button"
+        ".task-start"
       )
       .forEach((button) => {
         button.addEventListener(
           "click",
           () => {
-            const id =
-              button.dataset.taskId;
-
-            startTask(id);
+            startTask(
+              button.dataset.taskId
+            );
           }
         );
       });
   }
 
+  /* =========================================================
+     START TASK
+     ========================================================= */
+
   async function startTask(taskId) {
     const task =
       tasks.find(
-        (t) =>
-          String(t.id ?? t.task_id) ===
+        (item) =>
+          String(item.id) ===
           String(taskId)
       );
 
@@ -959,7 +1001,14 @@
 
     if (activeTaskId) {
       alert(
-        "একটি Task ইতিমধ্যে চলছে।"
+        "আগে চলমান Task শেষ করুন।"
+      );
+      return;
+    }
+
+    if (isTaskCooldown(task)) {
+      alert(
+        "এই Task এখনো cooldown-এ আছে।"
       );
       return;
     }
@@ -978,45 +1027,134 @@
 
       openTaskModal(task);
 
-      startTaskTimers(taskId);
+      startTaskTimer();
 
     } catch (error) {
-      console.error(
-        "TASK START ERROR:",
-        error
-      );
-
       alert(
         error.message ||
-          "Task শুরু করা যায়নি।"
+        "Task শুরু করা যায়নি।"
       );
     }
   }
 
   /* =========================================================
-     TASK TIMER + HEARTBEAT
+     TASK MODAL
      ========================================================= */
 
-  function startTaskTimers(taskId) {
-    stopTaskTimers();
-
-    taskStartedAt = Date.now();
-
-    updateCountdown();
-
-    taskTimer = setInterval(
-      updateCountdown,
-      1000
+  function openTaskModal(task) {
+    $("taskModal")?.classList.remove(
+      "hidden"
     );
 
-    // Backend heartbeat প্রতি ৪ সেকেন্ডে
-    heartbeatTimer = setInterval(
-      async () => {
+    if ($("modalTaskTitle")) {
+      $("modalTaskTitle").textContent =
+        task.title ||
+        task.name ||
+        "Task";
+    }
+
+    if ($("modalTaskInfo")) {
+      $("modalTaskInfo").textContent =
+        task.description ||
+        task.details ||
+        "Task সম্পন্ন করুন।";
+    }
+
+    if ($("modalStatus")) {
+      $("modalStatus").textContent =
+        "Task চলছে...";
+    }
+
+    if ($("countdown")) {
+      $("countdown").textContent =
+        "10";
+    }
+
+    if ($("progressBar")) {
+      $("progressBar").style.width =
+        "0%";
+    }
+
+    if ($("verifyTaskBtn")) {
+      $("verifyTaskBtn").disabled =
+        true;
+    }
+  }
+
+  function closeTaskModal() {
+    if (activeTaskId) {
+      cancelActiveTask();
+      return;
+    }
+
+    $("taskModal")?.classList.add(
+      "hidden"
+    );
+  }
+
+  /* =========================================================
+     TASK TIMER
+     ========================================================= */
+
+  function startTaskTimer() {
+    stopTaskTimer();
+
+    let seconds = 10;
+
+    if ($("countdown")) {
+      $("countdown").textContent =
+        seconds;
+    }
+
+    taskTimer =
+      setInterval(async () => {
+        seconds--;
+
+        if ($("countdown")) {
+          $("countdown").textContent =
+            Math.max(seconds, 0);
+        }
+
+        const progress =
+          ((10 - seconds) / 10) * 100;
+
+        if ($("progressBar")) {
+          $("progressBar").style.width =
+            `${Math.min(
+              Math.max(progress, 0),
+              100
+            )}%`;
+        }
+
+        if (seconds <= 0) {
+          stopTaskTimer();
+
+          if ($("modalStatus")) {
+            $("modalStatus").textContent =
+              "Task complete হচ্ছে...";
+          }
+
+          if ($("verifyTaskBtn")) {
+            $("verifyTaskBtn").disabled =
+              false;
+          }
+
+          await completeTask();
+        }
+
+      }, 1000);
+
+    /*
+     * Backend heartbeat 8 sec-এর মধ্যে চায়।
+     * তাই প্রতি 4 sec-এ heartbeat।
+     */
+    heartbeatTimer =
+      setInterval(async () => {
         if (!activeTaskId) return;
 
         try {
           await api(
-            `/api/tasks/${encodeURIComponent(taskId)}/heartbeat`,
+            `/api/tasks/${encodeURIComponent(activeTaskId)}/heartbeat`,
             {
               method: "POST"
             }
@@ -1024,74 +1162,13 @@
         } catch (error) {
           console.warn(
             "Heartbeat failed:",
-            error
+            error.message
           );
         }
-      },
-      4000
-    );
+      }, 4000);
   }
 
-  function updateCountdown() {
-    if (!activeTaskId) return;
-
-    const elapsed =
-      Date.now() - taskStartedAt;
-
-    const total = 10000;
-
-    const remaining =
-      Math.max(
-        0,
-        total - elapsed
-      );
-
-    const seconds =
-      Math.ceil(
-        remaining / 1000
-      );
-
-    setText(
-      "countdown",
-      remaining > 0
-        ? `${seconds}s`
-        : "Ready"
-    );
-
-    const progress =
-      Math.min(
-        100,
-        (elapsed / total) * 100
-      );
-
-    const bar =
-      $("progressBar");
-
-    if (bar) {
-      bar.style.width =
-        `${progress}%`;
-    };
-
-    const verify =
-      $("verifyTaskBtn");
-
-    if (verify) {
-      verify.disabled =
-        remaining > 0;
-
-      verify.style.opacity =
-        remaining > 0
-          ? "0.5"
-          : "1";
-
-      verify.style.cursor =
-        remaining > 0
-          ? "not-allowed"
-          : "pointer";
-    }
-  }
-
-  function stopTaskTimers() {
+  function stopTaskTimer() {
     if (taskTimer) {
       clearInterval(taskTimer);
       taskTimer = null;
@@ -1107,200 +1184,152 @@
   }
 
   /* =========================================================
-     TASK COMPLETE
+     COMPLETE TASK
      ========================================================= */
 
   async function completeTask() {
-    if (!activeTaskId) {
-      return;
-    }
+    if (!activeTaskId) return;
 
-    const elapsed =
-      Date.now() - taskStartedAt;
-
-    if (elapsed < 10000) {
-      alert(
-        "Task সম্পূর্ণ করতে ১০ সেকেন্ড অপেক্ষা করুন।"
-      );
-
-      return;
-    }
-
-    const id =
+    const taskId =
       activeTaskId;
 
-    const button =
-      $("verifyTaskBtn");
-
-    if (button) {
-      button.disabled = true;
-      button.textContent =
-        "Processing...";
-    }
-
     try {
-      // সঠিক backend endpoint
+      if ($("verifyTaskBtn")) {
+        $("verifyTaskBtn").disabled =
+          true;
+      }
+
+      /*
+       * Backend completion endpoint:
+       * POST /api/tasks/:id/complete
+       */
       await api(
-        `/api/tasks/${encodeURIComponent(id)}/complete`,
+        `/api/tasks/${encodeURIComponent(taskId)}/complete`,
         {
           method: "POST"
         }
       );
 
-      stopTaskTimers();
+      stopTaskTimer();
 
       activeTaskId = null;
       activeTask = null;
+      taskStartedAt = null;
 
-      closeTaskModal();
-
-      /*
-       * সবচেয়ে গুরুত্বপূর্ণ:
-       * Complete হওয়ার পর Dashboard reload।
-       * তাই Balance সাথে সাথে update হবে।
-       */
-      await refreshAll();
-
-      alert(
-        "Task সফলভাবে Complete হয়েছে। Balance আপডেট হয়েছে।"
-      );
-
-    } catch (error) {
-      console.error(
-        "TASK COMPLETE ERROR:",
-        error
-      );
-
-      if (button) {
-        button.disabled = false;
-        button.textContent =
-          "Verify Task";
+      if ($("modalStatus")) {
+        $("modalStatus").textContent =
+          "Task সফলভাবে সম্পন্ন হয়েছে! Balance update হচ্ছে...";
       }
 
-      alert(
-        error.message ||
-          "Task Complete করা যায়নি।"
-      );
+      /*
+       * Complete হওয়ার সাথে সাথে
+       * Dashboard + Task + History refresh।
+       */
+      await Promise.allSettled([
+        loadDashboard(),
+        loadTasks(),
+        loadHistory()
+      ]);
+
+      renderBalance();
+      renderTasks();
+      renderHistory();
+
+      setTimeout(() => {
+        $("taskModal")?.classList.add(
+          "hidden"
+        );
+      }, 700);
+
+    } catch (error) {
+      if ($("verifyTaskBtn")) {
+        $("verifyTaskBtn").disabled =
+          false;
+      }
+
+      if ($("modalStatus")) {
+        $("modalStatus").textContent =
+          error.message ||
+          "Task complete করা যায়নি।";
+      }
+
+      /*
+       * যদি 401 হয় তাহলে session শেষ।
+       */
+      if (error.status === 401) {
+        forceLogout();
+      }
     }
   }
 
   /* =========================================================
-     TASK CANCEL
+     CANCEL TASK
      ========================================================= */
 
-  async function cancelTask() {
-    if (!activeTaskId) {
-      closeTaskModal();
-      return;
-    }
-
-    const id =
+  async function cancelActiveTask() {
+    const taskId =
       activeTaskId;
 
-    stopTaskTimers();
-
-    try {
-      await api(
-        `/api/tasks/${encodeURIComponent(id)}/cancel`,
-        {
-          method: "POST"
-        }
-      );
-    } catch (error) {
-      console.warn(
-        "Task cancel error:",
-        error
-      );
-    }
+    stopTaskTimer();
 
     activeTaskId = null;
     activeTask = null;
+    taskStartedAt = null;
 
-    closeTaskModal();
-
-    await loadTasks().catch(() => {});
-  }
-
-  /* =========================================================
-     TASK MODAL
-     ========================================================= */
-
-  function openTaskModal(task) {
-    const modal =
-      $("taskModal");
-
-    if (!modal) return;
-
-    setText(
-      "modalTaskTitle",
-      task.title ||
-        task.name ||
-        "Task"
-    );
-
-    setText(
-      "modalTaskInfo",
-      `Reward: ${money(
-        task.reward ??
-        task.amount ??
-        0
-      )}`
-    );
-
-    setText(
-      "modalStatus",
-      "Task চলছে..."
-    );
-
-    modal.style.display = "";
-  }
-
-  function closeTaskModal() {
-    const modal =
-      $("taskModal");
-
-    if (modal) {
-      modal.style.display =
-        "none";
+    if (taskId) {
+      try {
+        await api(
+          `/api/tasks/${encodeURIComponent(taskId)}/cancel`,
+          {
+            method: "POST"
+          }
+        );
+      } catch (error) {
+        console.warn(
+          "Task cancel:",
+          error.message
+        );
+      }
     }
+
+    $("taskModal")?.classList.add(
+      "hidden"
+    );
   }
 
   /* =========================================================
-     HISTORY
+     NOTICES
      ========================================================= */
 
-  async function loadHistory() {
-    const data =
-      await api("/api/history");
-
-    const history =
-      Array.isArray(data)
-        ? data
-        : (
-            data.history ||
-            data.data ||
-            []
-          );
-
-    renderHistory(history);
-
-    return history;
-  }
-
-  function renderHistory(history) {
+  function renderNotices() {
     const list =
-      $("historyList");
+      $("noticeList");
+
+    const homeNotice =
+      $("homeNotice");
+
+    if (homeNotice) {
+      if (notices.length) {
+        const latest =
+          notices[0];
+
+        homeNotice.textContent =
+          latest.message ||
+          latest.text ||
+          latest.title ||
+          "নতুন ঘোষণা দেখুন।";
+      } else {
+        homeNotice.textContent =
+          "নতুন task ও গুরুত্বপূর্ণ ঘোষণা এখানে দেখা যাবে।";
+      }
+    }
 
     if (!list) return;
 
-    if (!history.length) {
+    if (!notices.length) {
       list.innerHTML = `
-        <div style="
-          padding:20px;
-          text-align:center;
-          color:#64748b;
-        ">
-          এখনো কোনো History নেই।
+        <div class="empty-state">
+          বর্তমানে কোনো Notice নেই।
         </div>
       `;
 
@@ -1308,866 +1337,312 @@
     }
 
     list.innerHTML =
-      history
-        .map((item) => {
-          const title =
-            item.title ||
-            item.task_title ||
-            "Task";
+      notices.map((notice) => {
+        return `
+          <article class="notice-item">
 
-          const amount =
-            item.amount ??
-            item.reward ??
-            0;
+            <strong>
+              ${escapeHTML(
+                notice.title ||
+                "Notice"
+              )}
+            </strong>
 
-          const date =
-            item.created_at ||
-            item.createdAt ||
-            "";
+            <p>
+              ${escapeHTML(
+                notice.message ||
+                notice.text ||
+                notice.description ||
+                ""
+              )}
+            </p>
 
-          return `
-            <div style="
-              background:#fff;
-              border:1px solid #e5e7eb;
-              border-radius:14px;
-              padding:14px;
-              margin:10px 0;
-            ">
-              <div style="
-                display:flex;
-                justify-content:space-between;
-                gap:10px;
-              ">
-                <b>${escapeHTML(title)}</b>
-
-                <strong style="
-                  color:#16a34a;
-                ">
-                  +${money(amount)}
-                </strong>
-              </div>
-
-              ${
-                date
-                  ? `
-                    <div style="
-                      color:#64748b;
-                      margin-top:5px;
-                      font-size:13px;
-                    ">
-                      ${escapeHTML(
-                        formatDateTime(date)
-                      )}
-                    </div>
-                  `
-                  : ""
-              }
-            </div>
-          `;
-        })
-        .join("");
+          </article>
+        `;
+      }).join("");
   }
 
   /* =========================================================
-     NOTICE
+     HISTORY
      ========================================================= */
 
-  async function loadNotices() {
-    const data =
-      await api("/api/notices");
+  function renderHistory() {
+    const container =
+      $("historyList");
 
-    const notices =
-      Array.isArray(data)
-        ? data
-        : (
-            data.notices ||
-            data.data ||
-            []
-          );
+    if (!container) return;
 
-    renderNotices(notices);
+    if (!history.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          এখনো কোনো earning history নেই।
+        </div>
+      `;
 
-    return notices;
-  }
-
-  function renderNotices(notices) {
-    const list =
-      $("noticeList");
-
-    if (list) {
-      if (!notices.length) {
-        list.innerHTML =
-          `<div style="color:#64748b;">
-             এখন কোনো Notice নেই।
-           </div>`;
-      } else {
-        list.innerHTML =
-          notices
-            .map(
-              (notice) => `
-                <div style="
-                  padding:12px 0;
-                ">
-                  <b>
-                    ${escapeHTML(
-                      notice.title ||
-                      "Notice"
-                    )}
-                  </b>
-
-                  <div style="
-                    margin-top:5px;
-                  ">
-                    ${escapeHTML(
-                      notice.message ||
-                      notice.text ||
-                      ""
-                    )}
-                  </div>
-                </div>
-              `
-            )
-            .join("");
-      }
-    }
-
-    const home =
-      $("homeNotice");
-
-    if (home && notices.length) {
-      const latest =
-        notices[0];
-
-      home.textContent =
-        latest.message ||
-        latest.text ||
-        latest.title ||
-        "";
-    }
-  }
-
-  /* =========================================================
-     REFRESH EVERYTHING
-     ========================================================= */
-
-  async function refreshAll() {
-    await Promise.all([
-      loadDashboard().catch(
-        console.error
-      ),
-
-      loadTasks().catch(
-        console.error
-      ),
-
-      loadHistory().catch(
-        console.error
-      ),
-
-      loadNotices().catch(
-        console.error
-      )
-    ]);
-
-    updateUserUI();
-  }
-
-  /* =========================================================
-     OPEN DASHBOARD
-     ========================================================= */
-
-  async function openDashboard() {
-    showDashboardPage();
-
-    await loadMe().catch(() => {});
-
-    if (!me && !session) {
-      showAuthPage();
       return;
     }
 
-    await refreshAll();
+    container.innerHTML =
+      history.map((item) => {
+        const amount =
+          Number(
+            item.amount || 0
+          );
 
-    updateUserUI();
+        return `
+          <article class="history-item">
+
+            <div>
+              <strong>
+                ${escapeHTML(
+                  item.title ||
+                  item.task_title ||
+                  item.taskTitle ||
+                  "Task"
+                )}
+              </strong>
+
+              <small>
+                ${formatDateTime(
+                  item.created_at ||
+                  item.createdAt ||
+                  item.completed_at
+                )}
+              </small>
+            </div>
+
+            <div class="history-amount">
+              ${money(amount)}
+            </div>
+
+            <div class="history-status">
+              ${escapeHTML(
+                item.status ||
+                "Completed"
+              )}
+            </div>
+
+          </article>
+        `;
+      }).join("");
   }
 
   /* =========================================================
-     PROFILE MODAL
+     LOGOUT
      ========================================================= */
 
-  function createProfileModal() {
-    if ($("mjrProfileOverlay")) {
-      return;
-    }
-
-    const overlay =
-      document.createElement("div");
-
-    overlay.id =
-      "mjrProfileOverlay";
-
-    overlay.style.cssText = `
-      position:fixed;
-      inset:0;
-      z-index:9998;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding:20px;
-      background:rgba(15,23,42,.55);
-      backdrop-filter:blur(5px);
-    `;
-
-    overlay.innerHTML = `
-      <div style="
-        width:min(430px,100%);
-        background:#fff;
-        border-radius:24px;
-        overflow:hidden;
-        box-shadow:0 25px 60px rgba(0,0,0,.25);
-      ">
-
-        <div style="
-          padding:28px 22px;
-          text-align:center;
-          color:#fff;
-          background:linear-gradient(
-            135deg,
-            #2563eb,
-            #4f46e5
-          );
-          position:relative;
-        ">
-
-          <button
-            id="mjrProfileClose"
-            type="button"
-            style="
-              position:absolute;
-              right:15px;
-              top:12px;
-              width:38px;
-              height:38px;
-              border:0;
-              border-radius:50%;
-              background:rgba(255,255,255,.18);
-              color:#fff;
-              font-size:24px;
-              cursor:pointer;
-            "
-          >
-            ×
-          </button>
-
-          <img
-            src="profile.jpg"
-            alt="Masud JR"
-            style="
-              width:105px;
-              height:105px;
-              object-fit:cover;
-              object-position:center;
-              border-radius:50%;
-              border:4px solid #fff;
-              box-shadow:0 8px 25px rgba(0,0,0,.2);
-            "
-          >
-
-          <h2
-            id="mjrProfileName"
-            style="
-              margin:14px 0 5px;
-              font-size:25px;
-            "
-          >
-            Masud JR Official
-          </h2>
-
-          <div
-            id="mjrProfileId"
-            style="
-              opacity:.9;
-            "
-          >
-            User
-          </div>
-        </div>
-
-        <div style="
-          padding:20px;
-        ">
-
-          <div style="
-            display:grid;
-            grid-template-columns:repeat(3,1fr);
-            gap:8px;
-            margin-bottom:18px;
-          ">
-
-            <div style="
-              text-align:center;
-              padding:12px 5px;
-              background:#eff6ff;
-              border-radius:14px;
-            ">
-              <div style="
-                font-size:12px;
-                color:#64748b;
-              ">
-                Balance
-              </div>
-
-              <b id="mjrProfileBalance">
-                ৳0
-              </b>
-            </div>
-
-            <div style="
-              text-align:center;
-              padding:12px 5px;
-              background:#f0fdf4;
-              border-radius:14px;
-            ">
-              <div style="
-                font-size:12px;
-                color:#64748b;
-              ">
-                Today
-              </div>
-
-              <b id="mjrProfileToday">
-                ৳0
-              </b>
-            </div>
-
-            <div style="
-              text-align:center;
-              padding:12px 5px;
-              background:#eef2ff;
-              border-radius:14px;
-            ">
-              <div style="
-                font-size:12px;
-                color:#64748b;
-              ">
-                Completed
-              </div>
-
-              <b id="mjrProfileCompleted">
-                0
-              </b>
-            </div>
-
-          </div>
-
-          <div style="
-            border-top:1px solid #e5e7eb;
-            padding-top:14px;
-          ">
-
-            <div style="
-              display:flex;
-              justify-content:space-between;
-              padding:10px 0;
-            ">
-              <span>User ID</span>
-              <b id="mjrProfileUserId">
-                -
-              </b>
-            </div>
-
-            <div style="
-              display:flex;
-              justify-content:space-between;
-              padding:10px 0;
-            ">
-              <span>Joined</span>
-              <b id="mjrProfileJoined">
-                -
-              </b>
-            </div>
-
-          </div>
-
-          <button
-            id="mjrProfileSupport"
-            type="button"
-            style="
-              width:100%;
-              margin-top:14px;
-              padding:14px;
-              border:0;
-              border-radius:14px;
-              background:#eff6ff;
-              color:#2563eb;
-              font-weight:700;
-              font-size:16px;
-              cursor:pointer;
-            "
-          >
-            🎧 Support Team
-          </button>
-
-          <button
-            id="mjrProfileLogout"
-            type="button"
-            style="
-              width:100%;
-              margin-top:10px;
-              padding:14px;
-              border:0;
-              border-radius:14px;
-              background:#fef2f2;
-              color:#dc2626;
-              font-weight:700;
-              font-size:16px;
-              cursor:pointer;
-            "
-          >
-            🚪 Logout
-          </button>
-
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(
-      overlay
-    );
-
-    $("mjrProfileClose")
-      ?.addEventListener(
-        "click",
-        closeProfileModal
-      );
-
-    overlay.addEventListener(
-      "click",
-      (event) => {
-        if (event.target === overlay) {
-          closeProfileModal();
-        }
-      }
-    );
-
-    $("mjrProfileSupport")
-      ?.addEventListener(
-        "click",
-        () => {
-          closeProfileModal();
-          openSupportModal();
-        }
-      );
-
-    $("mjrProfileLogout")
-      ?.addEventListener(
-        "click",
-        logout
-      );
-  }
-
-  function openProfileModal() {
-    createProfileModal();
-
-    setText(
-      "mjrProfileName",
-      me?.name ||
-        me?.username ||
-        "Masud JR Official"
-    );
-
-    setText(
-      "mjrProfileId",
-      me?.id ||
-        me?.user_id ||
-        me?.username ||
-        "-"
-    );
-
-    setText(
-      "mjrProfileUserId",
-      me?.id ||
-        me?.user_id ||
-        me?.username ||
-        "-"
-    );
-
-    setText(
-      "mjrProfileBalance",
-      money(me?.balance || 0)
-    );
-
-    setText(
-      "mjrProfileToday",
-      money(
-        me?.todayEarnings || 0
-      )
-    );
-
-    setText(
-      "mjrProfileCompleted",
-      me?.completedCount || 0
-    );
-
-    setText(
-      "mjrProfileJoined",
-      me?.created_at
-        ? formatDate(me.created_at)
-        : "-"
-    );
-
-    $("mjrProfileOverlay").style.display =
-      "flex";
-  }
-
-  function closeProfileModal() {
-    const overlay =
-      $("mjrProfileOverlay");
-
-    if (overlay) {
-      overlay.style.display =
-        "none";
-    }
-  }
-
-  /* =========================================================
-     SUPPORT MODAL
-     ========================================================= */
-
-  function createSupportModal() {
-    if ($("mjrSupportOverlay")) {
-      return;
-    }
-
-    const overlay =
-      document.createElement("div");
-
-    overlay.id =
-      "mjrSupportOverlay";
-
-    overlay.style.cssText = `
-      position:fixed;
-      inset:0;
-      z-index:9999;
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding:20px;
-      background:rgba(15,23,42,.55);
-      backdrop-filter:blur(5px);
-    `;
-
-    overlay.innerHTML = `
-      <div style="
-        width:min(400px,100%);
-        background:#fff;
-        border-radius:24px;
-        overflow:hidden;
-        box-shadow:0 25px 60px rgba(0,0,0,.25);
-      ">
-
-        <div style="
-          padding:20px;
-          background:linear-gradient(
-            135deg,
-            #2563eb,
-            #1d4ed8
-          );
-          color:#fff;
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-        ">
-
-          <div style="
-            font-size:22px;
-            font-weight:800;
-          ">
-            🎧 Support Team
-          </div>
-
-          <button
-            id="mjrSupportClose"
-            type="button"
-            style="
-              border:0;
-              background:transparent;
-              color:#fff;
-              font-size:28px;
-              cursor:pointer;
-            "
-          >
-            ×
-          </button>
-
-        </div>
-
-        <div style="
-          padding:20px;
-        ">
-
-          <p style="
-            margin-top:0;
-            color:#64748b;
-            font-size:15px;
-          ">
-            যেকোনো সমস্যায় আমাদের সাথে যোগাযোগ করুন।
-          </p>
-
-          <a
-            href="https://wa.me/8801961504587"
-            target="_blank"
-            rel="noopener noreferrer"
-            style="
-              display:block;
-              text-decoration:none;
-              background:#16a34a;
-              color:#fff;
-              padding:17px;
-              border-radius:15px;
-              margin-top:15px;
-              font-size:17px;
-              font-weight:800;
-            "
-          >
-            🟢 WhatsApp
-            <span style="
-              display:block;
-              font-size:14px;
-              margin-top:4px;
-              font-weight:500;
-            ">
-              01961504587
-            </span>
-          </a>
-
-          <a
-            href="https://m.me/masud.11.jr"
-            target="_blank"
-            rel="noopener noreferrer"
-            style="
-              display:block;
-              text-decoration:none;
-              background:#2563eb;
-              color:#fff;
-              padding:17px;
-              border-radius:15px;
-              margin-top:12px;
-              font-size:17px;
-              font-weight:800;
-            "
-          >
-            🔵 Facebook Messenger
-            <span style="
-              display:block;
-              font-size:14px;
-              margin-top:4px;
-              font-weight:500;
-            ">
-              Messenger-এ যোগাযোগ করুন
-            </span>
-          </a>
-
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(
-      overlay
-    );
-
-    $("mjrSupportClose")
-      ?.addEventListener(
-        "click",
-        closeSupportModal
-      );
-
-    overlay.addEventListener(
-      "click",
-      (event) => {
-        if (event.target === overlay) {
-          closeSupportModal();
-        }
-      }
-    );
-  }
-
-  function openSupportModal() {
-    createSupportModal();
-
-    $("mjrSupportOverlay").style.display =
-      "flex";
-  }
-
-  function closeSupportModal() {
-    const overlay =
-      $("mjrSupportOverlay");
-
-    if (overlay) {
-      overlay.style.display =
-        "none";
-    }
-  }
-
-  /* =========================================================
-     PROFILE / SUPPORT BUTTON DETECTION
-     ========================================================= */
-
-  function setupNavigation() {
-    // Existing nav buttons
-    document
-      .querySelectorAll(
-        "button, .nav-item, .bottom-nav button, [role='button']"
-      )
-      .forEach((element) => {
-        const text =
-          safeText(element.textContent)
-            .trim()
-            .toLowerCase();
-
-        if (
-          text === "profile" ||
-          text === "প্রোফাইল"
-        ) {
-          element.addEventListener(
-            "click",
-            openProfileModal
-          );
-        }
-
-        if (
-          text.includes("support team") ||
-          text.includes("support")
-        ) {
-          element.addEventListener(
-            "click",
-            openSupportModal
-          );
-        }
-      });
-
-    $("closeTaskModal")
-      ?.addEventListener(
-        "click",
-        closeTaskModal
-      );
-
-    $("verifyTaskBtn")
-      ?.addEventListener(
-        "click",
-        completeTask
-      );
-
-    $("cancelTaskBtn")
-      ?.addEventListener(
-        "click",
-        cancelTask
-      );
-
-    $("withdrawBtn")
-      ?.addEventListener(
-        "click",
-        () => {
-          const form =
-            $("withdrawForm");
-
-          if (form) {
-            form.style.display =
-              form.style.display === "none"
-                ? ""
-                : "none";
+  async function logout() {
+    try {
+      if (session) {
+        await api(
+          "/api/logout",
+          {
+            method: "POST"
           }
-        }
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "Logout request:",
+        error.message
       );
+    }
+
+    forceLogout();
+  }
+
+  function forceLogout() {
+    stopTaskTimer();
+
+    session = "";
+    me = null;
+
+    tasks = [];
+    notices = [];
+    history = [];
+
+    balance = 0;
+    todayIncome = 0;
+    totalIncome = 0;
+    completedCount = 0;
+
+    activeTaskId = null;
+    activeTask = null;
+
+    clearSavedUser();
+
+    $("dashboard")?.classList.add(
+      "hidden"
+    );
+
+    $("authPage")?.classList.remove(
+      "hidden"
+    );
+
+    $("taskModal")?.classList.add(
+      "hidden"
+    );
+
+    activateLoginTab();
   }
 
   /* =========================================================
-     FORMS
+     BUTTONS
+     ========================================================= */
+
+  function setupButtons() {
+    $("headerLogout")?.addEventListener(
+      "click",
+      logout
+    );
+
+    $("profileLogout")?.addEventListener(
+      "click",
+      logout
+    );
+
+    $("closeTaskModal")?.addEventListener(
+      "click",
+      closeTaskModal
+    );
+
+    $("cancelTaskBtn")?.addEventListener(
+      "click",
+      cancelActiveTask
+    );
+
+    /*
+     * Manual verify button.
+     * Timer শেষ হওয়ার আগে backend complete করবে না,
+     * তাই button disabled থাকবে।
+     */
+    $("verifyTaskBtn")?.addEventListener(
+      "click",
+      completeTask
+    );
+
+    $("taskModal")?.addEventListener(
+      "click",
+      (event) => {
+        if (
+          event.target ===
+          $("taskModal")
+        ) {
+          cancelActiveTask();
+        }
+      }
+    );
+  }
+
+  /* =========================================================
+     AUTH FORMS
      ========================================================= */
 
   function setupForms() {
-    $("loginForm")
-      ?.addEventListener(
-        "submit",
-        handleLogin
-      );
+    $("loginForm")?.addEventListener(
+      "submit",
+      handleLogin
+    );
 
-    $("registerForm")
-      ?.addEventListener(
-        "submit",
-        handleRegistration
-      );
-  }
-
-  /* =========================================================
-     FORMAT HELPERS
-     ========================================================= */
-
-  function formatDateTime(value) {
-    const date =
-      new Date(value);
-
-    if (
-      Number.isNaN(
-        date.getTime()
-      )
-    ) {
-      return safeText(value);
-    }
-
-    return date.toLocaleString(
-      "en-GB"
+    $("registerForm")?.addEventListener(
+      "submit",
+      handleRegister
     );
   }
 
-  function escapeHTML(value) {
-    return safeText(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  /* =========================================================
+     OPTIONAL SUPPORT BUTTON
+     ========================================================= */
+
+  function setupSupport() {
+    const supportButtons =
+      document.querySelectorAll(
+        "[data-support]"
+      );
+
+    supportButtons.forEach(
+      (button) => {
+        button.addEventListener(
+          "click",
+          () => {
+            const type =
+              button.dataset.support;
+
+            if (type === "whatsapp") {
+              window.open(
+                "https://wa.me/8801961504587",
+                "_blank",
+                "noopener"
+              );
+            }
+
+            if (type === "messenger") {
+              window.open(
+                "https://m.me/masud.11.jr",
+                "_blank",
+                "noopener"
+              );
+            }
+          }
+        );
+      }
+    );
+  }
+
+  /* =========================================================
+     INITIAL SESSION
+     ========================================================= */
+
+  async function restoreSession() {
+    if (!session) {
+      openAuth();
+      return;
+    }
+
+    const savedUser =
+      loadSavedUser();
+
+    if (savedUser) {
+      me = savedUser;
+    }
+
+    try {
+      /*
+       * Session সত্যিই valid কিনা check।
+       */
+      await loadMe();
+
+      openDashboard();
+
+    } catch (error) {
+      console.warn(
+        "Session restore failed:",
+        error.message
+      );
+
+      forceLogout();
+    }
   }
 
   /* =========================================================
      INITIALIZE
      ========================================================= */
 
-  async function init() {
-    loadSavedUser();
-
+  function init() {
     setupAuthTabs();
     setupForms();
     setupNavigation();
-
-    createProfileModal();
-    createSupportModal();
+    setupButtons();
+    setupSupport();
 
     /*
-     * Saved session থাকলে সরাসরি dashboard।
+     * Registration form যেন CSS-এর কারণে hidden না থাকে
+     * এবং Login default হিসেবে দেখা যায়।
      */
-    if (session) {
-      try {
-        await openDashboard();
-      } catch (error) {
-        console.error(
-          "INIT ERROR:",
-          error
-        );
+    activateLoginTab();
 
-        clearUser();
-        showAuthPage();
-        activateLoginTab();
-      }
-    } else {
-      showAuthPage();
-      activateLoginTab();
-    }
+    restoreSession();
   }
-
-  /* =========================================================
-     START
-     ========================================================= */
 
   if (
     document.readyState ===
