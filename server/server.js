@@ -507,11 +507,12 @@ app.get('/api/dashboard',(req,res)=>{
     WHERE user_id=?
   `).get(u.id).c;
 
-  res.json({
-    balance:u.balance,
-    todayEarnings:todayE,
-    totalEarnings:totalE,
-    completedCount:completed
+ res.json({
+  balance: u.balance,
+  todayIncome: todayE,
+  totalIncome: totalE,
+  completed: completed
+});
   });
 });
 
