@@ -480,39 +480,35 @@ app.get('/api/dashboard',(req,res)=>{
     });
   }
 
-  const start=new Date();
-  start.setHours(0,0,0,0);
+  const today = new Date().toISOString().slice(0,10);
 
-  const today=start.toISOString();
-
-  const todayE=q(`
+  const todayE = q(`
     SELECT COALESCE(SUM(amount),0) s
     FROM history
     WHERE user_id=?
-      AND status="Completed"
+      AND status='Completed'
       AND created_at>=?
   `).get(u.id,today).s;
 
-  const totalE=q(`
+  const totalE = q(`
     SELECT COALESCE(SUM(amount),0) s
     FROM history
     WHERE user_id=?
-      AND status="Completed"
+      AND status='Completed'
       AND amount>0
   `).get(u.id).s;
 
-  const completed=q(`
+  const completed = q(`
     SELECT COUNT(*) c
     FROM task_completions
     WHERE user_id=?
   `).get(u.id).c;
 
- res.json({
-  balance: u.balance,
-  todayIncome: todayE,
-  totalIncome: totalE,
-  completed: completed
-});
+  res.json({
+    balance: u.balance,
+    todayIncome: todayE,
+    totalIncome: totalE,
+    completed: completed
   });
 });
 
